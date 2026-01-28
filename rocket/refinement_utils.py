@@ -181,6 +181,7 @@ def init_processed_dict(
     target_seq=None,
     PRESET="model_1_ptm",
     postfix="processed_feats.pickle",
+    processed_feats_path: str | None = None,
 ):
     if bias_version == 4:
         device_processed_features = rocket.make_processed_dict_from_template(
@@ -197,9 +198,25 @@ def init_processed_dict(
         )
         feature_key = "template_torsion_angles_sin_cos"
     else:
-        with open(glob.glob(f"{path}/predictions/*{postfix}")[0], "rb") as file:
-            # Load the data from the pickle file
-            processed_features = pickle.load(file)
+        processed_features = None
+        if processed_feats_path:
+            with open(processed_feats_path, "rb") as file:
+                processed_features = pickle.load(file)
+        else:
+            prediction_glob = glob.glob(f"{path}/predictions/*{postfix}")
+            if prediction_glob:
+                with open(prediction_glob[0], "rb") as file:
+                    processed_features = pickle.load(file)
+            else:
+                input_glob = glob.glob(f"{path}/*{postfix}")
+                if not input_glob:
+                    input_glob = glob.glob(f"{path}/*.pickle")
+                if not input_glob:
+                    raise FileNotFoundError(
+                        "No processed features found in predictions/ or input dir."
+                    )
+                with open(input_glob[0], "rb") as file:
+                    processed_features = pickle.load(file)
 
         device_processed_features = rk_utils.move_tensors_to_device(
             processed_features, device=device

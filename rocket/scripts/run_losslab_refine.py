@@ -23,20 +23,18 @@ from rocket.refinement_config import RocketRefinmentConfig
 def _resolve_input_pdb(config: RocketRefinmentConfig) -> Path:
     if config.paths.input_pdb:
         return Path(config.paths.input_pdb)
-    return (
-        Path(config.paths.path)
-        / "ROCKET_inputs"
-        / f"{config.paths.file_id}-pred-aligned.pdb"
-    )
+    input_dir = Path(config.paths.input_dir or config.paths.path)
+    return input_dir / f"{config.paths.file_id}-pred-aligned.pdb"
 
 
 def _resolve_target_map(config: RocketRefinmentConfig) -> Path:
     if config.paths.target_map:
         return Path(config.paths.target_map)
 
+    input_dir = Path(config.paths.input_dir or config.paths.path)
+
     search_roots = [
-        Path(config.paths.path) / "ROCKET_inputs",
-        Path(config.paths.path),
+        input_dir,
     ]
     patterns = [
         f"*{config.paths.file_id}*masked*.ccp4",
@@ -71,6 +69,7 @@ def run_panddamap_refinement(
 
     device = f"cuda:{config.execution.cuda_device}"
     base_dir = Path(config.paths.path)
+    input_dir = Path(config.paths.input_dir or config.paths.path)
 
     target_map_path = _resolve_target_map(config)
     target_map = gemmi.read_ccp4_map(str(target_map_path))
@@ -160,11 +159,12 @@ def run_panddamap_refinement(
     )
     device_features, feature_key, features_at_it_start = rkrf_utils.init_processed_dict(
         bias_version=config.algorithm.bias_version,
-        path=str(base_dir),
+        path=str(input_dir),
         device=device,
         template_pdb=template_pdb_name,
         target_seq=None,
         PRESET=preset,
+        processed_feats_path=config.paths.msa_feat_init_path,
     )
 
     device_features, optimizer, _ = rkrf_utils.init_bias(

@@ -58,14 +58,8 @@ Homepage = "https://github.com/alisiafadini/ROCKET"
 Repository = "https://github.com/alisiafadini/ROCKET"
 
 [project.scripts]
-"rk.predict" = "rocket.scripts.run_pretrained_openfold:cli_runopenfold"
-"rk.preprocess" = "rocket.scripts.run_preprocess:cli_runpreprocess"
 "rk.refine" = "rocket.scripts.run_refine:cli_runrefine"
 "rk.config" = "rocket.scripts.run_config:cli_runconfig"
-"rk.mse" = "rocket.scripts.run_mse:run_mse_all_datasets"
-"rk.msacluster" = "rocket.scripts.run_msacluster:main"
-"rk.score" = "rocket.scripts.run_msascore:main"
-"rk.plddt" = "rocket.scripts.run_plddtoptimize:main"
 
 [tool.setuptools.dynamic]
 version = { file = "rocket/VERSION" }

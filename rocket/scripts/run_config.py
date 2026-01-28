@@ -1,92 +1,79 @@
 import argparse
-import os
+from pathlib import Path
 
 from loguru import logger
 
-from ..refinement_config import DATAMODE, RUNMODE, RocketRefinmentConfig, gen_config
+from ..refinement_config import DATAMODE, gen_config
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Generate ROCKET configuration files")
-    parser.add_argument(
-        "--mode",
-        type=str,
-        choices=["phase1", "phase2", "both"],
-        default="both",
-        help="Execution mode: phase1, phase2, or both (default: both)",
+    parser = argparse.ArgumentParser(
+        description="Generate a PanddaMap ROCKET config",
     )
     parser.add_argument(
         "--datamode",
         type=str,
-        choices=["xray", "cryoem", "panddamap"],
+        choices=["panddamap"],
+        default="panddamap",
         help="Data mode",
     )
-    parser.add_argument("--working-dir", type=str, help="Working directory path")
-    parser.add_argument("--file-id", type=str, help="File ID to use")
     parser.add_argument(
-        "--pre-phase1-config",
+        "--input-dir",
         type=str,
-        help="Path to pre-phase1 configuration file (required for phase2 mode)",
+        required=True,
+        help="Input folder containing .pdb/.ccp4/.pickle",
     )
+    parser.add_argument(
+        "--working-dir",
+        type=str,
+        required=True,
+        help="Output working directory",
+    )
+    parser.add_argument("--file-id", type=str, required=True, help="File ID")
+    return parser.parse_args()
 
-    args = parser.parse_args()
 
-    # Convert string mode to RUNMODE enum
-    run_mode = RUNMODE(args.mode)
-
-    # Convert string datamode to DATAMODE enum if provided
-    data_mode = None
-    if args.datamode:
-        data_mode = DATAMODE(args.datamode)
-
-    # Load pre_phase1_config if provided and mode is phase2
-    pre_phase1_config_obj = None
-    if args.pre_phase1_config:
-        if run_mode == RUNMODE.PHASE2 and not os.path.exists(args.pre_phase1_config):
-            parser.error(f"Pre-phase1 config file not found: {args.pre_phase1_config}")
-        # Load the config file
-        pre_phase1_config_obj = RocketRefinmentConfig.from_yaml_file(
-            args.pre_phase1_config
-        )  # noqa: E501
-    elif run_mode == RUNMODE.PHASE2:
-        parser.error("--pre-phase1-config is required when mode is phase2")
-
-    return {
-        "mode": run_mode,
-        "datamode": data_mode,
-        "working_dir": args.working_dir,
-        "file_id": args.file_id,
-        "pre_phase1_config": pre_phase1_config_obj,
-    }
+def _auto_find(input_dir: Path, patterns: list[str]) -> str | None:
+    for pattern in patterns:
+        matches = sorted(input_dir.glob(pattern))
+        if matches:
+            return str(matches[0])
+    return None
 
 
 def cli_runconfig():
     args = parse_args()
+    input_dir = Path(args.input_dir)
+    working_dir = Path(args.working_dir)
 
-    result = gen_config(
-        mode=args.get("mode"),
-        datamode=args.get("datamode"),
-        working_dir=args.get("working_dir"),
-        file_id=args.get("file_id"),
-        pre_phase1_config=args.get("pre_phase1_config"),
+    config = gen_config(
+        working_dir=str(working_dir),
+        input_dir=str(input_dir),
+        file_id=args.file_id,
+        datamode=DATAMODE(args.datamode),
     )
 
-    if args.get("mode") == RUNMODE.BOTH:
-        phase1_config, phase2_config = result
-        logger.info(
-            f"Generated Phase 1 config at: {os.path.join(args.get('working_dir'), 'ROCKET_config_phase1.yaml')}"  # noqa: E501
+    config.paths.input_pdb = (
+        _auto_find(
+            input_dir,
+            ["*pred-aligned*.pdb", "*.pdb"],
         )
-        logger.info(
-            f"Generated Phase 2 config at: {os.path.join(args.get('working_dir'), 'ROCKET_config_phase2.yaml')}"  # noqa: E501
-        )
-    elif args.get("mode") == RUNMODE.PHASE1:
-        logger.info(
-            f"Generated Phase 1 config at: {os.path.join(args.get('working_dir'), 'ROCKET_config_phase1.yaml')}"  # noqa: E501
-        )
-    else:  # PHASE2
-        logger.info(
-            f"Generated Phase 2 config at: {os.path.join(result.working_dir, 'ROCKET_config_phase2.yaml')}"  # noqa: E501
-        )
+        or ""
+    )
+    config.paths.template_pdb = config.paths.input_pdb or None
+    config.paths.target_map = _auto_find(
+        input_dir,
+        ["*masked*.ccp4", "*masked*.map", "*.ccp4", "*.map"],
+    )
+    config.paths.msa_feat_init_path = _auto_find(
+        input_dir,
+        ["*processed*.pickle", "*.pickle"],
+    )
+
+    output_path = Path(working_dir) / "ROCKET_config.yaml"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    config.to_yaml_file(str(output_path))
+    logger.info("Generated config at: %s", output_path)
 
 
 if __name__ == "__main__":

@@ -23,14 +23,13 @@ class StrEnum(str, Enum):
 
 
 class DATAMODE(StrEnum):
-    XRAY = "xray"
-    CRYOEM = "cryoem"
     PANDDAMAP = "panddamap"
 
 
 # Path and file configuration
 class PathConfig(BaseModel):
     path: str = ""
+    input_dir: str = ""
     file_id: str = ""
     input_pdb: str = ""
     template_pdb: str | None = None
@@ -53,8 +52,8 @@ class ExecutionConfig(BaseModel):
 
 # Optimization parameters
 class OptimizationParams(BaseModel):
-    additive_learning_rate: float = 0.05
-    multiplicative_learning_rate: float = 1.0
+    additive_learning_rate: float = 1e-3
+    multiplicative_learning_rate: float = 1e-3
     weight_decay: float | None = 0.0001
     batch_sub_ratio: float = 0.7
     number_of_batches: int = 1
@@ -88,7 +87,7 @@ class AlgorithmConfig(BaseModel):
 
 # Data-specific configuration
 class DataConfig(BaseModel):
-    datamode: DATAMODE = "xray"
+    datamode: DATAMODE = "panddamap"
     free_flag: str = "R-free-flags"
     testset_value: int = 1
     min_resolution: float | None = None
@@ -159,6 +158,7 @@ class RocketRefinmentConfig(BaseModel):
     _flat_to_nested_map: ClassVar[dict[str, str]] = {
         # Paths
         "path": "paths.path",
+        "input_dir": "paths.input_dir",
         "file_id": "paths.file_id",
         "template_pdb": "paths.template_pdb",
         "input_msa": "paths.input_msa",
@@ -308,63 +308,31 @@ class RocketRefinmentConfig(BaseModel):
         return cls.model_validate(nested_dict)
 
 
-class RUNMODE(StrEnum):
-    PHASE1 = "phase1"
-    PHASE2 = "phase2"
-    BOTH = "both"
-
-
 def gen_config(
-    mode: RUNMODE | None = RUNMODE.BOTH,
-    datamode: DATAMODE | None = None,
-    working_dir: str | None = None,
-    file_id: str | None = None,
-    pre_phase1_config: RocketRefinmentConfig | None = None,
+    working_dir: str,
+    input_dir: str,
+    file_id: str,
+    datamode: DATAMODE | None = DATAMODE.PANDDAMAP,
 ):
-    if mode == RUNMODE.PHASE1:
-        phase1_config = gen_config_phase1(datamode, working_dir, file_id)
-        phase1_config.to_yaml_file(
-            os.path.join(working_dir, "ROCKET_config_phase1.yaml")
-        )
-        return phase1_config
-    elif mode == RUNMODE.PHASE2:
-        phase2_config = gen_config_phase2(pre_phase1_config)
-        phase2_config.to_yaml_file(
-            os.path.join(phase2_config.working_dir, "ROCKET_config_phase2.yaml")
-        )
-        return phase2_config
-    else:
-        phase1_config = gen_config_phase1(datamode, working_dir, file_id)
-        phase1_config.to_yaml_file(
-            os.path.join(working_dir, "ROCKET_config_phase1.yaml")
-        )
-        phase2_config = gen_config_phase2(phase1_config)
-        phase2_config.to_yaml_file(
-            os.path.join(working_dir, "ROCKET_config_phase2.yaml")
-        )
-        return phase1_config, phase2_config
-
-
-def gen_config_phase1(datamode: DATAMODE, working_dir: str, file_id: str):
-    phase1_config = RocketRefinmentConfig(
-        note="phase1_<your_note_here>",
+    config = RocketRefinmentConfig(
+        note="panddamap_<your_note_here>",
         paths=PathConfig(
             path=working_dir,
+            input_dir=input_dir,
             file_id=file_id,
             uuid_hex=uuid.uuid4().hex[:10],
         ),
         execution=ExecutionConfig(
             cuda_device=0,
-            num_of_runs=3,
+            num_of_runs=1,
             verbose=False,
         ),
         algorithm=AlgorithmConfig(
             iterations=100,
             optimization=OptimizationParams(
-                additive_learning_rate=0.05,
-                multiplicative_learning_rate=1.0,
+                additive_learning_rate=1e-3,
+                multiplicative_learning_rate=1e-3,
                 l2_weight=1e-7,
-                phase2_final_lr=1e-3,
                 smooth_stage_epochs=50,
             ),
         ),
@@ -373,29 +341,4 @@ def gen_config_phase1(datamode: DATAMODE, working_dir: str, file_id: str):
             min_resolution=3.0,
         ),
     )
-    return phase1_config
-
-
-def gen_config_phase2(phase1_config: RocketRefinmentConfig):
-    phase2_config = phase1_config.model_copy()
-    phase2_config.note = "phase2_<your_note_here>"
-    phase2_config.data.min_resolution = None
-
-    output_directory_path = os.path.join(
-        phase2_config.path, "ROCKET_outputs", phase2_config.uuid_hex
-    )
-    phase1_path = os.path.join(output_directory_path, phase1_config.note)
-    starting_bias_path = os.path.join(phase1_path, "best_msa_bias*.pt")
-    starting_weights_path = os.path.join(phase1_path, "best_feat_weights*.pt")
-
-    phase2_config.paths.starting_bias = starting_bias_path
-    phase2_config.paths.starting_weights = starting_weights_path
-    if phase1_config.input_msa is not None:
-        msa_feat_init_path = os.path.join(phase1_path, "msa_feat_start.npy")
-        phase2_config.paths.msa_feat_init_path = msa_feat_init_path
-
-    phase2_config.algorithm.iterations = 500
-    phase2_config.algorithm.optimization.smooth_stage_epochs = None
-    phase2_config.execution.num_of_runs = 1
-
-    return phase2_config
+    return config
