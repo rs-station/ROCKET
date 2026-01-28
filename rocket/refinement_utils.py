@@ -10,7 +10,6 @@ from SFC_Torch import PDBParser
 import rocket
 from rocket import coordinates as rk_coordinates
 from rocket import utils as rk_utils
-from rocket.xtal import utils as llg_utils
 
 
 def generate_feature_dict(
@@ -414,81 +413,3 @@ def position_alignment(
         domain_segs=domain_segs,
     )
     return aligned_xyz, plddts_res, pseudo_Bs.detach()
-
-
-def update_sigmaA(
-    llgloss,
-    llgloss_rbr,
-    aligned_xyz,
-    constant_fp_added_HKL=None,
-    constant_fp_added_asu=None,
-):
-    Ecalc, Fc = llgloss.compute_Ecalc(
-        aligned_xyz.detach(),
-        return_Fc=True,
-        return_Rfactors=False,
-        update_scales=True,
-        added_chain_HKL=constant_fp_added_HKL,
-        added_chain_asu=constant_fp_added_asu,
-    )
-    Ecalc_rbr, _ = llgloss_rbr.compute_Ecalc(
-        aligned_xyz.detach(),
-        return_Fc=True,
-        return_Rfactors=False,
-        solvent=False,
-        update_scales=True,
-        added_chain_HKL=constant_fp_added_HKL,
-        added_chain_asu=constant_fp_added_asu,
-    )
-    llgloss.refine_sigmaA_newton(
-        Ecalc, n_steps=5, subset="working", smooth_overall_weight=0.0
-    )
-    llgloss_rbr.refine_sigmaA_newton(
-        Ecalc_rbr, n_steps=2, subset="working", smooth_overall_weight=0.0
-    )
-    return llgloss, llgloss_rbr, Ecalc, Fc
-
-
-def sigmaA_from_true(
-    llgloss,
-    llgloss_rbr,
-    aligned_xyz,
-    Etrue,
-    phitrue,
-    constant_fp_added_HKL=None,
-    constant_fp_added_asu=None,
-):
-    Ecalc, Fc = llgloss.compute_Ecalc(
-        aligned_xyz.detach(),
-        return_Fc=True,
-        update_scales=True,
-        added_chain_HKL=constant_fp_added_HKL,
-        added_chain_asu=constant_fp_added_asu,
-    )
-    Ecalc_rbr, Fc_rbr = llgloss_rbr.compute_Ecalc(
-        aligned_xyz.detach(),
-        return_Fc=True,
-        solvent=False,
-        update_scales=True,
-        added_chain_HKL=constant_fp_added_HKL,
-        added_chain_asu=constant_fp_added_asu,
-    )
-    sigmas = llg_utils.sigmaA_from_model(
-        Etrue,
-        phitrue,
-        Ecalc,
-        Fc,
-        llgloss.sfc.dHKL,
-        llgloss.bin_labels,
-    )
-    llgloss.sigmaAs = sigmas
-    sigmas_rbr = llg_utils.sigmaA_from_model(
-        Etrue,
-        phitrue,
-        Ecalc_rbr,
-        Fc_rbr,
-        llgloss.sfc.dHKL,
-        llgloss.bin_labels,
-    )
-    llgloss_rbr.sigmaAs = sigmas_rbr
-    return llgloss, llgloss_rbr
