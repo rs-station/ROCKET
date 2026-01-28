@@ -462,8 +462,8 @@ def test_position_alignment(
     )
 
     # Configure assert_numpy to return numpy arrays
-    mock_assert_numpy.side_effect = (
-        lambda x: x.numpy() if isinstance(x, torch.Tensor) else x
+    mock_assert_numpy.side_effect = lambda x: (
+        x.numpy() if isinstance(x, torch.Tensor) else x
     )  # noqa: E501
 
     # Configure plddt2pseudoB to return B-factors
@@ -526,8 +526,8 @@ def test_position_alignment_with_reference_bfactor(
 
     # Configure mocks as before
     mock_extract_allatoms.return_value = (torch.ones((3, 3)), torch.ones(3))
-    mock_assert_numpy.side_effect = (
-        lambda x: x.numpy() if isinstance(x, torch.Tensor) else x
+    mock_assert_numpy.side_effect = lambda x: (
+        x.numpy() if isinstance(x, torch.Tensor) else x
     )  # noqa: E501
     mock_plddt2pseudoB.return_value = torch.ones(3) * 30.0
     mock_weighting.return_value = np.ones(3)

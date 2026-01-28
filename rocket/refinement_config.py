@@ -25,6 +25,7 @@ class StrEnum(str, Enum):
 class DATAMODE(StrEnum):
     XRAY = "xray"
     CRYOEM = "cryoem"
+    PANDDAMAP = "panddamap"
 
 
 # Path and file configuration
@@ -33,6 +34,7 @@ class PathConfig(BaseModel):
     file_id: str = ""
     input_pdb: str = ""
     template_pdb: str | None = None
+    target_map: str | None = None
     input_msa: str | None = None
     sub_msa_path: str | None = None
     sub_delmat_path: str | None = None
@@ -118,6 +120,27 @@ class DataConfig(BaseModel):
     model_config = {"use_enum_values": True}
 
 
+class PanddaMapConfig(BaseModel):
+    loss_type: str = "l2"
+    output_dir: str = "panddamap_outputs"
+    run_note: str = "panddamap"
+    save_every_n_iterations: int = 50
+    early_stopping_patience: int = 150
+    save_best_pdb: bool = True
+    save_trajectory_pdb: bool = True
+    save_trajectory_interval: int = 1
+    use_wandb: bool = False
+    wandb_entity: str | None = Field(
+        default_factory=lambda: os.environ.get("WANDB_ENTITY")
+    )
+    wandb_project: str | None = Field(
+        default_factory=lambda: os.environ.get("WANDB_PROJECT")
+    )
+    wandb_name: str | None = None
+    wandb_tags: list[str] = Field(default_factory=list)
+    wandb_notes: str | None = None
+
+
 # Main configuration class
 class RocketRefinmentConfig(BaseModel):
     # Metadata
@@ -128,6 +151,7 @@ class RocketRefinmentConfig(BaseModel):
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     algorithm: AlgorithmConfig = Field(default_factory=AlgorithmConfig)
     data: DataConfig = Field(default_factory=DataConfig)
+    panddamap: PanddaMapConfig = Field(default_factory=PanddaMapConfig)
 
     model_config = {"use_enum_values": True}
 
@@ -139,6 +163,7 @@ class RocketRefinmentConfig(BaseModel):
         "template_pdb": "paths.template_pdb",
         "input_msa": "paths.input_msa",
         "input_pdb": "paths.input_pdb",
+        "target_map": "paths.target_map",
         "sub_msa_path": "paths.sub_msa_path",
         "sub_delmat_path": "paths.sub_delmat_path",
         "msa_feat_init_path": "paths.msa_feat_init_path",
@@ -208,7 +233,7 @@ class RocketRefinmentConfig(BaseModel):
         # Create an ordered dictionary with the desired field order
         ordered_dict = {}
         # Define the order of top-level fields
-        field_order = ["note", "data", "paths", "execution", "algorithm"]
+        field_order = ["note", "data", "paths", "execution", "algorithm", "panddamap"]
 
         # Add fields in the specified order
         for field in field_order:

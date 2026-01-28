@@ -16,7 +16,10 @@ def parse_args():
         help="Execution mode: phase1, phase2, or both (default: both)",
     )
     parser.add_argument(
-        "--datamode", type=str, choices=["xray", "cryoem"], help="Data mode"
+        "--datamode",
+        type=str,
+        choices=["xray", "cryoem", "panddamap"],
+        help="Data mode",
     )
     parser.add_argument("--working-dir", type=str, help="Working directory path")
     parser.add_argument("--file-id", type=str, help="File ID to use")

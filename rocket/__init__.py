@@ -3,6 +3,7 @@
 from rocket import base, coordinates, cryo, refinement_utils, utils, xtal
 from rocket.base import MSABiasAFv1, MSABiasAFv2, MSABiasAFv3, TemplateBiasAF
 from rocket.helper import make_processed_dict_from_template
+from rocket.losslab_predictor import OpenFoldPredictor, PredictorConfig
 from rocket.mse import MSEloss, MSElossBB
 from rocket.xtal.targets import LLGloss
 
@@ -23,4 +24,6 @@ __all__ = [
     "LLGloss",
     "MSEloss",
     "MSElossBB",
+    "OpenFoldPredictor",
+    "PredictorConfig",
 ]
