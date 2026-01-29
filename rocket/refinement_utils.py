@@ -1,10 +1,13 @@
 import glob
+import os
 import pickle
 import re
 
 import numpy as np
 import skbio
 import torch
+from openfold import config as of_config
+from openfold.data import data_pipeline, feature_pipeline, templates
 from SFC_Torch import PDBParser
 
 import rocket
@@ -23,6 +26,75 @@ def generate_feature_dict(
         seqemb_mode=False,
     )
     return feature_dict
+
+
+def build_processed_features_from_alignment(
+    fasta_path: str,
+    alignment_dir: str,
+    preset: str = "model_1_ptm",
+    device: str = "cpu",
+    max_recycling_iters: int | None = None,
+    template_mmcif_dir: str | None = None,
+    kalign_binary_path: str | None = None,
+    max_template_date: str | None = None,
+    template_max_hits: int | None = None,
+    template_release_dates_path: str | None = None,
+    template_obsolete_pdbs_path: str | None = None,
+):
+    if template_mmcif_dir is None:
+        template_mmcif_dir = os.environ.get("OPENFOLD_MMCIF_DIR")
+        if template_mmcif_dir is None:
+            data_dir = os.environ.get("OPENFOLD_DATA_DIR")
+            if data_dir:
+                for candidate in (
+                    "pdb_mmcif",
+                    "mmcif",
+                    "mmcif_dir",
+                    "mmcif_files",
+                ):
+                    candidate_path = os.path.join(data_dir, candidate)
+                    if os.path.isdir(candidate_path):
+                        template_mmcif_dir = candidate_path
+                        break
+
+    if kalign_binary_path is None:
+        kalign_binary_path = os.environ.get("KALIGN_BINARY_PATH")
+
+    template_featurizer = None
+    if template_mmcif_dir and kalign_binary_path:
+        template_featurizer = templates.HhsearchHitFeaturizer(
+            mmcif_dir=template_mmcif_dir,
+            max_template_date=max_template_date or "2100-01-01",
+            max_hits=template_max_hits or 20,
+            kalign_binary_path=kalign_binary_path,
+            release_dates_path=template_release_dates_path,
+            obsolete_pdbs_path=template_obsolete_pdbs_path,
+        )
+
+    data_processor = data_pipeline.DataPipeline(template_featurizer=template_featurizer)
+    raw_features = generate_feature_dict(
+        fasta_path=fasta_path,
+        alignment_dir=alignment_dir,
+        data_processor=data_processor,
+    )
+
+    cfg = of_config.model_config(preset)
+    if max_recycling_iters is not None:
+        cfg.data.common.max_recycling_iters = max_recycling_iters
+
+    feature_processor = feature_pipeline.FeaturePipeline(cfg.data)
+    processed_features = feature_processor.process_features(
+        raw_features,
+        mode="predict",
+        is_multimer=False,
+    )
+
+    if device != "cpu":
+        processed_features = rk_utils.move_tensors_to_device(
+            processed_features, device=device
+        )
+
+    return processed_features
 
 
 def number_to_letter(n):
@@ -284,7 +356,8 @@ def init_bias(
     elif bias_version == 3:
         if starting_weights is not None:
             device_processed_features["msa_feat_weights"] = (
-                torch.load(glob.glob(starting_weights)[0])
+                torch
+                .load(glob.glob(starting_weights)[0])
                 .detach()
                 .to(device=device)
                 .requires_grad_(True)
@@ -300,7 +373,8 @@ def init_bias(
             )
         elif starting_bias is not None:
             device_processed_features["msa_feat_bias"] = (
-                torch.load(glob.glob(starting_bias)[0])
+                torch
+                .load(glob.glob(starting_bias)[0])
                 .detach()
                 .to(device=device)
                 .requires_grad_(True)

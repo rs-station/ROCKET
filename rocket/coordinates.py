@@ -571,7 +571,8 @@ def extract_allatoms(outputs, feats, cra_name_sfc: list):
     )  # [n_res, N_atom_types]
     crname_atom = crname_repeats[utils.assert_numpy(atom_mask) == 1]
     atom_types_repeats = (
-        utils.assert_numpy(residue_constants.atom_types)
+        utils
+        .assert_numpy(residue_constants.atom_types)
         .reshape(1, N_atom_types)
         .repeat(n_res, axis=0)
     )  # [n_res, N_atom_types]

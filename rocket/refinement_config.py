@@ -32,6 +32,14 @@ class PathConfig(BaseModel):
     input_dir: str = ""
     file_id: str = ""
     input_pdb: str = ""
+    input_fasta: str | None = None
+    alignment_dir: str | None = None
+    template_mmcif_dir: str | None = None
+    template_release_dates_path: str | None = None
+    template_obsolete_pdbs_path: str | None = None
+    kalign_binary_path: str | None = None
+    max_template_date: str | None = None
+    template_max_hits: int | None = None
     template_pdb: str | None = None
     target_map: str | None = None
     input_msa: str | None = None
@@ -163,6 +171,14 @@ class RocketRefinmentConfig(BaseModel):
         "template_pdb": "paths.template_pdb",
         "input_msa": "paths.input_msa",
         "input_pdb": "paths.input_pdb",
+        "input_fasta": "paths.input_fasta",
+        "alignment_dir": "paths.alignment_dir",
+        "template_mmcif_dir": "paths.template_mmcif_dir",
+        "template_release_dates_path": "paths.template_release_dates_path",
+        "template_obsolete_pdbs_path": "paths.template_obsolete_pdbs_path",
+        "kalign_binary_path": "paths.kalign_binary_path",
+        "max_template_date": "paths.max_template_date",
+        "template_max_hits": "paths.template_max_hits",
         "target_map": "paths.target_map",
         "sub_msa_path": "paths.sub_msa_path",
         "sub_delmat_path": "paths.sub_delmat_path",

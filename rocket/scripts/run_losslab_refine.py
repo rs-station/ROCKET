@@ -27,6 +27,28 @@ def _resolve_input_pdb(config: RocketRefinmentConfig) -> Path:
     return input_dir / f"{config.paths.file_id}-pred-aligned.pdb"
 
 
+def _resolve_input_fasta(config: RocketRefinmentConfig) -> Path | None:
+    if config.paths.input_fasta:
+        return Path(config.paths.input_fasta)
+    input_dir = Path(config.paths.input_dir or config.paths.path)
+    for pattern in ["*.fasta", "*.fa", "*.faa"]:
+        matches = sorted(input_dir.glob(pattern))
+        if matches:
+            return matches[0]
+    return None
+
+
+def _resolve_alignment_dir(config: RocketRefinmentConfig) -> Path | None:
+    if config.paths.alignment_dir:
+        return Path(config.paths.alignment_dir)
+    input_dir = Path(config.paths.input_dir or config.paths.path)
+    for candidate in ["alignments", "alignment", "msa"]:
+        dir_path = input_dir / candidate
+        if dir_path.exists() and dir_path.is_dir():
+            return dir_path
+    return None
+
+
 def _resolve_target_map(config: RocketRefinmentConfig) -> Path:
     if config.paths.target_map:
         return Path(config.paths.target_map)
@@ -152,20 +174,44 @@ def run_panddamap_refinement(
     ).to(device)
     af_model.freeze()
 
-    template_pdb_name = (
-        Path(config.paths.template_pdb).name
-        if config.paths.template_pdb
-        else input_pdb_path.name
-    )
-    device_features, feature_key, features_at_it_start = rkrf_utils.init_processed_dict(
-        bias_version=config.algorithm.bias_version,
-        path=str(input_dir),
-        device=device,
-        template_pdb=template_pdb_name,
-        target_seq=None,
-        PRESET=preset,
-        processed_feats_path=config.paths.msa_feat_init_path,
-    )
+    fasta_path = _resolve_input_fasta(config)
+    alignment_dir = _resolve_alignment_dir(config)
+
+    if fasta_path and alignment_dir:
+        if config.algorithm.bias_version == 4:
+            raise ValueError("bias_version=4 requires template-based features.")
+        device_features = rkrf_utils.build_processed_features_from_alignment(
+            fasta_path=str(fasta_path),
+            alignment_dir=str(alignment_dir),
+            preset=preset,
+            device=device,
+            max_recycling_iters=config.algorithm.init_recycling,
+            template_mmcif_dir=config.paths.template_mmcif_dir,
+            kalign_binary_path=config.paths.kalign_binary_path,
+            max_template_date=config.paths.max_template_date,
+            template_max_hits=config.paths.template_max_hits,
+            template_release_dates_path=config.paths.template_release_dates_path,
+            template_obsolete_pdbs_path=config.paths.template_obsolete_pdbs_path,
+        )
+        feature_key = "msa_feat"
+        features_at_it_start = device_features[feature_key].detach().clone()
+    else:
+        template_pdb_name = (
+            Path(config.paths.template_pdb).name
+            if config.paths.template_pdb
+            else input_pdb_path.name
+        )
+        device_features, feature_key, features_at_it_start = (
+            rkrf_utils.init_processed_dict(
+                bias_version=config.algorithm.bias_version,
+                path=str(input_dir),
+                device=device,
+                template_pdb=template_pdb_name,
+                target_seq=None,
+                PRESET=preset,
+                processed_feats_path=config.paths.msa_feat_init_path,
+            )
+        )
 
     device_features, optimizer, _ = rkrf_utils.init_bias(
         device_processed_features=device_features,

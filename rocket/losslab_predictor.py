@@ -40,11 +40,15 @@ class OpenFoldPredictor:
         """Return [N, 4] tensor: [x, y, z, confidence]."""
         self.features[self.config.feature_key] = self.features_backup.detach().clone()
 
+        max_cycles = self.features[self.config.feature_key].shape[-1]
+        init_recycles = min(self.config.init_recycles, max_cycles)
+        iter_recycles = min(self.config.iter_recycles, max_cycles)
+
         if self.prevs is None:
             outputs, self.prevs = self.model(
                 self.features,
                 [None, None, None],
-                num_iters=self.config.init_recycles,
+                num_iters=init_recycles,
                 bias=False,
             )
             self.prevs = [p.detach() for p in self.prevs]
@@ -52,7 +56,7 @@ class OpenFoldPredictor:
             outputs, _ = self.model(
                 self.features,
                 deep_copied_prevs,
-                num_iters=self.config.iter_recycles,
+                num_iters=iter_recycles,
                 bias=True,
             )
         else:
@@ -60,7 +64,7 @@ class OpenFoldPredictor:
             outputs, _ = self.model(
                 self.features,
                 deep_copied_prevs,
-                num_iters=self.config.iter_recycles,
+                num_iters=iter_recycles,
                 bias=True,
             )
 
