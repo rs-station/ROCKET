@@ -53,6 +53,7 @@ class PathConfig(BaseModel):
 
 # Hardware and execution configuration
 class ExecutionConfig(BaseModel):
+    seed: int = 1
     cuda_device: int = 0
     num_of_runs: int = 1
     verbose: bool = False

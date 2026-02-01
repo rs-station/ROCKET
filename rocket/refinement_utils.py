@@ -325,11 +325,6 @@ def init_bias(
             .requires_grad_(True)
         )
         print("Loaded starting weights from:", weight_matches[0])
-        print(
-            "Starting weights stats:",
-            device_processed_features["msa_feat_weights"].mean().item(),
-            device_processed_features["msa_feat_weights"].std().item(),
-        )
     else:
         device_processed_features["msa_feat_weights"] = torch.ones(
             (512, num_res, 23), requires_grad=True, device=device
@@ -347,11 +342,6 @@ def init_bias(
             torch.load(bias_matches[0]).detach().to(device=device).requires_grad_(True)
         )
         print("Loaded starting bias from:", bias_matches[0])
-        print(
-            "Starting bias stats:",
-            device_processed_features["msa_feat_bias"].mean().item(),
-            device_processed_features["msa_feat_bias"].std().item(),
-        )
 
     if weight_decay is None:
         optimizer = torch.optim.Adam([
