@@ -254,46 +254,34 @@ def init_processed_dict(
     postfix="processed_feats.pickle",
     processed_feats_path: str | None = None,
 ):
-    if bias_version == 4:
-        device_processed_features = rocket.make_processed_dict_from_template(
-            template_pdb=f"{path}/ROCKET_inputs/{template_pdb}",
-            target_seq=target_seq,
-            config_preset=PRESET,
-            device=device,
-            msa_dict=None,
-        )
-        features_at_it_start = (
-            device_processed_features["template_torsion_angles_sin_cos"]
-            .detach()
-            .clone()
-        )
-        feature_key = "template_torsion_angles_sin_cos"
+    if bias_version != 3:
+        raise ValueError("Only bias_version=3 is supported.")
+
+    processed_features = None
+    if processed_feats_path:
+        with open(processed_feats_path, "rb") as file:
+            processed_features = pickle.load(file)
     else:
-        processed_features = None
-        if processed_feats_path:
-            with open(processed_feats_path, "rb") as file:
+        prediction_glob = glob.glob(f"{path}/predictions/*{postfix}")
+        if prediction_glob:
+            with open(prediction_glob[0], "rb") as file:
                 processed_features = pickle.load(file)
         else:
-            prediction_glob = glob.glob(f"{path}/predictions/*{postfix}")
-            if prediction_glob:
-                with open(prediction_glob[0], "rb") as file:
-                    processed_features = pickle.load(file)
-            else:
-                input_glob = glob.glob(f"{path}/*{postfix}")
-                if not input_glob:
-                    input_glob = glob.glob(f"{path}/*.pickle")
-                if not input_glob:
-                    raise FileNotFoundError(
-                        "No processed features found in predictions/ or input dir."
-                    )
-                with open(input_glob[0], "rb") as file:
-                    processed_features = pickle.load(file)
+            input_glob = glob.glob(f"{path}/*{postfix}")
+            if not input_glob:
+                input_glob = glob.glob(f"{path}/*.pickle")
+            if not input_glob:
+                raise FileNotFoundError(
+                    "No processed features found in predictions/ or input dir."
+                )
+            with open(input_glob[0], "rb") as file:
+                processed_features = pickle.load(file)
 
-        device_processed_features = rk_utils.move_tensors_to_device(
-            processed_features, device=device
-        )
-        features_at_it_start = device_processed_features["msa_feat"].detach().clone()
-        feature_key = "msa_feat"
+    device_processed_features = rk_utils.move_tensors_to_device(
+        processed_features, device=device
+    )
+    features_at_it_start = device_processed_features["msa_feat"].detach().clone()
+    feature_key = "msa_feat"
     return device_processed_features, feature_key, features_at_it_start
 
 
@@ -317,131 +305,74 @@ def init_bias(
     starting_weights=None,
     recombination_bias=None,
 ):
+    if bias_version != 3:
+        raise ValueError("Only bias_version=3 is supported.")
+
     num_res = device_processed_features["aatype"].shape[0]
     device_processed_features["msa_feat_bias"] = torch.zeros(
         (512, num_res, 23), requires_grad=True, device=device
     )
 
-    if bias_version == 4:
-        device_processed_features["template_torsion_angles_sin_cos_bias"] = (
-            torch.zeros_like(
-                device_processed_features["template_torsion_angles_sin_cos"],
-                requires_grad=True,
-                device=device,
-            )
+    if starting_weights is not None:
+        weight_matches = glob.glob(starting_weights)
+        if not weight_matches:
+            raise FileNotFoundError(f"No starting weights matched: {starting_weights}")
+        device_processed_features["msa_feat_weights"] = (
+            torch
+            .load(weight_matches[0])
+            .detach()
+            .to(device=device)
+            .requires_grad_(True)
         )
-        if weight_decay is None:
-            optimizer = torch.optim.Adam([
-                {
-                    "params": device_processed_features[
-                        "template_torsion_angles_sin_cos_bias"
-                    ],
-                    "lr": lr_a,
-                },
-            ])
-        else:
-            optimizer = torch.optim.AdamW(
-                [
-                    {
-                        "params": device_processed_features[
-                            "template_torsion_angles_sin_cos_bias"
-                        ],
-                        "lr": lr_a,
-                    },
-                ],
-                weight_decay=weight_decay,
-            )
-        bias_names = ["template_torsion_angles_sin_cos_bias"]
+        print("Loaded starting weights from:", weight_matches[0])
+        print(
+            "Starting weights stats:",
+            device_processed_features["msa_feat_weights"].mean().item(),
+            device_processed_features["msa_feat_weights"].std().item(),
+        )
+    else:
+        device_processed_features["msa_feat_weights"] = torch.ones(
+            (512, num_res, 23), requires_grad=True, device=device
+        )
 
-    elif bias_version == 3:
-        if starting_weights is not None:
-            device_processed_features["msa_feat_weights"] = (
-                torch
-                .load(glob.glob(starting_weights)[0])
-                .detach()
-                .to(device=device)
-                .requires_grad_(True)
-            )
-        else:
-            device_processed_features["msa_feat_weights"] = torch.ones(
-                (512, num_res, 23), requires_grad=True, device=device
-            )
+    if recombination_bias is not None:
+        device_processed_features["msa_feat_bias"] = (
+            recombination_bias.detach().to(device=device).requires_grad_(True)
+        )
+    elif starting_bias is not None:
+        bias_matches = glob.glob(starting_bias)
+        if not bias_matches:
+            raise FileNotFoundError(f"No starting bias matched: {starting_bias}")
+        device_processed_features["msa_feat_bias"] = (
+            torch.load(bias_matches[0]).detach().to(device=device).requires_grad_(True)
+        )
+        print("Loaded starting bias from:", bias_matches[0])
+        print(
+            "Starting bias stats:",
+            device_processed_features["msa_feat_bias"].mean().item(),
+            device_processed_features["msa_feat_bias"].std().item(),
+        )
 
-        if recombination_bias is not None:
-            device_processed_features["msa_feat_bias"] = (
-                recombination_bias.detach().to(device=device).requires_grad_(True)
-            )
-        elif starting_bias is not None:
-            device_processed_features["msa_feat_bias"] = (
-                torch
-                .load(glob.glob(starting_bias)[0])
-                .detach()
-                .to(device=device)
-                .requires_grad_(True)
-            )
-
-        if weight_decay is None:
-            optimizer = torch.optim.Adam([
+    if weight_decay is None:
+        optimizer = torch.optim.Adam([
+            {"params": device_processed_features["msa_feat_bias"], "lr": lr_a},
+            {
+                "params": device_processed_features["msa_feat_weights"],
+                "lr": lr_m,
+            },
+        ])
+    else:
+        optimizer = torch.optim.AdamW(
+            [
                 {"params": device_processed_features["msa_feat_bias"], "lr": lr_a},
                 {
                     "params": device_processed_features["msa_feat_weights"],
                     "lr": lr_m,
                 },
-            ])
-        else:
-            optimizer = torch.optim.AdamW(
-                [
-                    {"params": device_processed_features["msa_feat_bias"], "lr": lr_a},
-                    {
-                        "params": device_processed_features["msa_feat_weights"],
-                        "lr": lr_m,
-                    },
-                ],
-                weight_decay=weight_decay,
-            )
-        bias_names = ["msa_feat_bias", "msa_feat_weights"]
-
-    elif bias_version == 2:
-        device_processed_features["msa_feat_weights"] = torch.eye(
-            512, dtype=torch.float32, requires_grad=True, device=device
+            ],
+            weight_decay=weight_decay,
         )
-
-        if weight_decay is None:
-            optimizer = torch.optim.Adam([
-                {"params": device_processed_features["msa_feat_bias"], "lr": lr_a},
-                {
-                    "params": device_processed_features["msa_feat_weights"],
-                    "lr": lr_m,
-                },
-            ])
-        else:
-            optimizer = torch.optim.AdamW(
-                [
-                    {"params": device_processed_features["msa_feat_bias"], "lr": lr_a},
-                    {
-                        "params": device_processed_features["msa_feat_weights"],
-                        "lr": lr_m,
-                    },
-                ],
-                weight_decay=weight_decay,
-            )
-        bias_names = ["msa_feat_bias", "msa_feat_weights"]
-
-    elif bias_version == 1:
-        if weight_decay is None:
-            optimizer = torch.optim.Adam([
-                {"params": device_processed_features["msa_feat_bias"], "lr": lr_a},
-            ])
-        else:
-            optimizer = torch.optim.AdamW(
-                [
-                    {"params": device_processed_features["msa_feat_bias"], "lr": lr_a},
-                ],
-                weight_decay=weight_decay,
-            )
-
-        bias_names = ["msa_feat_bias"]
-
+    bias_names = ["msa_feat_bias", "msa_feat_weights"]
     return device_processed_features, optimizer, bias_names
 
 

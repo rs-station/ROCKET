@@ -218,55 +218,23 @@ def test_early_stopper():
     assert stopper.counter == 2
 
 
-@patch("rocket.make_processed_dict_from_template")
 @patch("glob.glob")
 @patch("builtins.open")
 @patch("pickle.load")
-def test_init_processed_dict(mock_pickle_load, mock_open, mock_glob, mock_make_dict):
-    """Test init_processed_dict with both bias_version=4 and other values."""
+def test_init_processed_dict(mock_pickle_load, mock_open, mock_glob):
+    """Test init_processed_dict with bias_version=3 only."""
     # Mock device
     device = torch.device("cpu")
 
-    # Test with bias_version=4 (uses make_processed_dict_from_template)
-    # Setup mock return value for rocket.make_processed_dict_from_template
-    mock_processed_dict = {"template_torsion_angles_sin_cos": torch.ones(5, 4, 2)}
-    mock_make_dict.return_value = mock_processed_dict
-
-    # Call the function
-    result_dict, feature_key, features = init_processed_dict(
-        bias_version=4,
-        path="/test/path",
-        device=device,
-        template_pdb="template.pdb",
-        target_seq="ABCDEFG",
-    )
-
-    # Verify the function called make_processed_dict_from_template
-    mock_make_dict.assert_called_once_with(
-        template_pdb="/test/path/ROCKET_inputs/template.pdb",
-        target_seq="ABCDEFG",
-        config_preset="model_1_ptm",
-        device=device,
-        msa_dict=None,
-    )
-
-    # Verify returned values
-    assert result_dict == mock_processed_dict
-    assert feature_key == "template_torsion_angles_sin_cos"
-    assert torch.equal(features, mock_processed_dict["template_torsion_angles_sin_cos"])
-
-    # Reset mocks for next test
-    mock_make_dict.reset_mock()
-
-    # Test with bias_version=1 (uses pickle loading)
+    # Test with bias_version=3 (uses pickle loading)
     # Setup mock returns for glob, open, and pickle.load
     mock_glob.return_value = ["/test/path/predictions/test_processed_feats.pickle"]
     mock_pickle_dict = {"msa_feat": torch.ones(5, 10, 23), "aatype": torch.zeros(10)}
     mock_pickle_load.return_value = mock_pickle_dict
 
-    # Call the function with bias_version=1
+    # Call the function with bias_version=3
     result_dict, feature_key, features = init_processed_dict(
-        bias_version=1, path="/test/path", device=device
+        bias_version=3, path="/test/path", device=device
     )
 
     # Verify the glob pattern was correct
@@ -280,6 +248,10 @@ def test_init_processed_dict(mock_pickle_load, mock_open, mock_glob, mock_make_d
     assert torch.equal(features, mock_pickle_dict["msa_feat"])
     assert "msa_feat" in result_dict
     assert "aatype" in result_dict
+
+    # Unsupported bias_version should raise
+    with pytest.raises(ValueError, match="Only bias_version=3 is supported"):
+        init_processed_dict(bias_version=1, path="/test/path", device=device)
 
 
 def test_init_llgloss():
@@ -332,7 +304,7 @@ def test_init_llgloss():
 @patch("torch.optim.Adam")
 @patch("torch.optim.AdamW")
 def test_init_bias(mock_adamw, mock_adam):
-    """Test init_bias function with different bias versions."""
+    """Test init_bias function with bias_version=3 only."""
     # Mock the device and learning rates
     device = torch.device("cpu")
     lr_a = 1e-3
@@ -371,65 +343,15 @@ def test_init_bias(mock_adamw, mock_adam):
     mock_adam.reset_mock()
     mock_adamw.reset_mock()
 
-    # Test bias_version=1
-    result_features, optimizer, bias_names = init_bias(
-        device_processed_features=mock_features,
-        bias_version=1,
-        device=device,
-        lr_a=lr_a,
-        lr_m=lr_m,
-    )
-
-    # Check that msa_feat_bias was created with correct shape
-    assert "msa_feat_bias" in result_features
-    assert result_features["msa_feat_bias"].shape == (512, 10, 23)
-    assert result_features["msa_feat_bias"].requires_grad
-
-    # Check optimizer was created with correct parameters
-    mock_adam.assert_called_once()
-    assert bias_names == ["msa_feat_bias"]
-
-    # Reset mocks for next test
-    mock_adam.reset_mock()
-    mock_adamw.reset_mock()
-
-    # Test bias_version=4
-    result_features, optimizer, bias_names = init_bias(
-        device_processed_features={
-            "aatype": torch.zeros(10),
-            "template_torsion_angles_sin_cos": torch.zeros(10, 5, 2),
-        },
-        bias_version=4,
-        device=device,
-        lr_a=lr_a,
-        lr_m=lr_m,
-    )
-
-    # Check that template_torsion_angles_sin_cos_bias was created
-    assert "template_torsion_angles_sin_cos_bias" in result_features
-    assert result_features["template_torsion_angles_sin_cos_bias"].shape == (10, 5, 2)
-    assert result_features["template_torsion_angles_sin_cos_bias"].requires_grad
-
-    # Check bias names
-    assert bias_names == ["template_torsion_angles_sin_cos_bias"]
-
-    # Reset mocks for weight decay test
-    mock_adam.reset_mock()
-    mock_adamw.reset_mock()
-
-    # Test with weight_decay
-    result_features, optimizer, bias_names = init_bias(
-        device_processed_features=mock_features,
-        bias_version=2,
-        device=device,
-        lr_a=lr_a,
-        lr_m=lr_m,
-        weight_decay=0.01,
-    )
-
-    # Check AdamW was called instead of Adam
-    mock_adamw.assert_called_once()
-    mock_adam.assert_not_called()
+    # Unsupported bias_version should raise
+    with pytest.raises(ValueError, match="Only bias_version=3 is supported"):
+        init_bias(
+            device_processed_features=mock_features,
+            bias_version=1,
+            device=device,
+            lr_a=lr_a,
+            lr_m=lr_m,
+        )
 
 
 @patch("rocket.coordinates.extract_allatoms")

@@ -92,6 +92,8 @@ class MSABiasAFv1(AlphaFold):
             feats = tensor_tree_map(fetch_cur_batch, batch)
 
             is_final_iter = cycle_no == (num_iters - 1)
+            print("CYCLE NUMBER", cycle_no)
+            print("IS FINAL ITER:", is_final_iter)
 
             with torch.set_grad_enabled(is_grad_enabled and is_final_iter):
                 if is_final_iter and torch.is_autocast_enabled():
@@ -114,33 +116,26 @@ class MSABiasAFv1(AlphaFold):
         return outputs, [m_1_prev, z_prev, x_prev]
 
 
-class MSABiasAFv2(MSABiasAFv1):
-    """
-    AlphaFold with trainable bias + trainable linear combination in MSA space
-    """
-
-    def _bias(self, feats):
-        feats["msa_feat"][:, :, 25:48] = (
-            torch.einsum(
-                "ijk,in->njk",
-                feats["msa_feat"][:, :, 25:48],
-                feats["msa_feat_weights"],
-            )
-            + feats["msa_feat_bias"]
-        )
-        return feats
-
-
 class MSABiasAFv3(MSABiasAFv1):
     """
     AlphaFold with trainable bias + trainable linear combination in MSA space
     """
 
     def _bias(self, feats):
+        mean_val_before = feats["msa_feat"][:, :, 25:48].mean()
+        print(f"Mean before, to 8 decimal places: {mean_val_before:.8f}")
+        mean_weights = feats["msa_feat_weights"].mean()
+        mean_bias = feats["msa_feat_bias"].mean()
+        print(f"weights mean {mean_weights:.8f}")
+        print(f"bias mean {mean_bias:.8f}")
+        print("UNCUT SHAPE", feats["msa_feat"].shape)
+        print("SHAPE!", feats["msa_feat"][:, :, 25:48].shape)
         feats["msa_feat"][:, :, 25:48] = (
             feats["msa_feat"][:, :, 25:48].clone() * feats["msa_feat_weights"]
             + feats["msa_feat_bias"]
         )
+        mean_val = feats["msa_feat"][:, :, 25:48].mean()
+        print(f"Mean after, to 8 decimal places: {mean_val:.8f}")
         return feats
 
 

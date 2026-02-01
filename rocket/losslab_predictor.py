@@ -14,7 +14,7 @@ class PredictorConfig:
     """Configuration for OpenFold predictor wrapper."""
 
     feature_key: str = "msa_feat"
-    init_recycles: int = 3
+    init_recycles: int = 1
     iter_recycles: int = 1
 
 
@@ -28,6 +28,7 @@ class OpenFoldPredictor:
         features_backup,
         pdb_obj,
         config: PredictorConfig | None = None,
+        bias: bool = True,
     ) -> None:
         self.model = model
         self.features = features
@@ -35,29 +36,38 @@ class OpenFoldPredictor:
         self.pdb_obj = pdb_obj
         self.config = config or PredictorConfig()
         self.prevs = None
+        self._logged_bias_stats = False
+        self.bias = bias
 
     def __call__(self) -> torch.Tensor:
         """Return [N, 4] tensor: [x, y, z, confidence]."""
         self.features[self.config.feature_key] = self.features_backup.detach().clone()
 
-        max_cycles = self.features[self.config.feature_key].shape[-1]
-        init_recycles = min(self.config.init_recycles, max_cycles)
-        iter_recycles = min(self.config.iter_recycles, max_cycles)
-
+        init_recycles = self.config.init_recycles
+        iter_recycles = self.config.iter_recycles
+        print("init_recycles:", init_recycles)
+        print("PREDICTOR IS BEING CALLED")
         if self.prevs is None:
+            print("I AM HERE")
             outputs, self.prevs = self.model(
                 self.features,
                 [None, None, None],
                 num_iters=init_recycles,
                 bias=False,
             )
+            mean_val = self.features["msa_feat"][:, :, 25:48].mean()
+            print(f"Mean after OUTPUT, to 8 decimal places: {mean_val:.8f}")
+            self.features[self.config.feature_key] = (
+                self.features_backup.detach().clone()
+            )
             self.prevs = [p.detach() for p in self.prevs]
             deep_copied_prevs = [p.clone().detach() for p in self.prevs]
+            print("I AM ALSO HERE", self.features[self.config.feature_key].mean())
             outputs, _ = self.model(
                 self.features,
                 deep_copied_prevs,
                 num_iters=iter_recycles,
-                bias=True,
+                bias=self.bias,
             )
         else:
             deep_copied_prevs = [p.clone().detach() for p in self.prevs]
@@ -73,4 +83,5 @@ class OpenFoldPredictor:
             self.features,
             self.pdb_obj.cra_name,
         )
+        print("xyz_orth_sfc mean:", xyz_orth_sfc.mean())
         return torch.cat([xyz_orth_sfc, plddts.unsqueeze(-1)], dim=-1)
