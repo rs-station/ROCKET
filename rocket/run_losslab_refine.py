@@ -26,6 +26,7 @@ def run_panddamap_refinement(
     seed_value = pipeline.resolve_seed(config)
     pipeline.set_deterministic(seed_value)
     logger.info("Deterministic seeding enabled (seed={})", seed_value)
+
     inputs = pipeline.load_inputs(config)
     engine, output_dir, run_note = pipeline.build_engine(config, inputs)
     results, _, _ = pipeline.run_engine_with_predictor(
@@ -51,7 +52,6 @@ def main() -> None:
     starting_bias = None
     starting_weights = None
     if config.panddamap.run_mse_prepass:
-        logger.info("Running MSE prepass refinement...")
         starting_bias, starting_weights = pipeline.run_mseloss_refinement(
             config,
             writeout=config.panddamap.save_mse_biases,
