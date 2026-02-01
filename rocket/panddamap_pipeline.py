@@ -5,12 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import gemmi
 import numpy as np
 import SFC_Torch as sfc
 import torch
 from loguru import logger
 from LossLab import RealSpaceLoss, RefinementConfig, RefinementEngine
 from LossLab.losses.mse import MSECoordinatesLoss
+from LossLab.utils.map_utils import (
+    denoise_and_mask_ccp4_map,
+    parse_pdb_coords,
+)
 from openfold.config import model_config
 
 import rocket
@@ -68,13 +73,33 @@ def set_deterministic(seed: int) -> None:
     )
 
 
-def load_inputs(config: RocketRefinmentConfig) -> RefinementInputs:
+def preprocess_target_map(config: RocketRefinmentConfig) -> gemmi.Ccp4Map:
+    target_map_path = rk_io.resolve_target_map(config)
+    target_map = rk_io.load_target_map(target_map_path)
+    if not config.panddamap.preprocess_target_map:
+        return target_map
+    if not config.paths.ligand_pdb:
+        raise ValueError("paths.ligand_pdb is required for preprocessing")
+    ligand_coords = parse_pdb_coords(config.paths.ligand_pdb)
+    return denoise_and_mask_ccp4_map(
+        target_map,
+        ligand_coords,
+        high_res_limit=config.panddamap.denoise_high_res_limit,
+        mask_radius=config.panddamap.ligand_mask_radius,
+        tv_denoise=config.panddamap.tv_denoise,
+    )
+
+
+def load_inputs(
+    config: RocketRefinmentConfig,
+    target_map_override: gemmi.Ccp4Map | None = None,
+) -> RefinementInputs:
     device = f"cuda:{config.execution.cuda_device}"
     base_dir = Path(config.paths.path)
     input_dir = Path(config.paths.input_dir or config.paths.path)
 
     target_map_path = rk_io.resolve_target_map(config)
-    target_map = rk_io.load_target_map(target_map_path)
+    target_map = target_map_override or rk_io.load_target_map(target_map_path)
 
     input_pdb_path = rk_io.resolve_input_pdb(config)
     input_pdb = rk_io.load_input_pdb(input_pdb_path, target_map)
@@ -358,12 +383,13 @@ def log_results(results: dict, output_dir: Path, run_note: str) -> None:
 def run_mseloss_refinement(
     config: RocketRefinmentConfig,
     writeout: bool = False,
+    target_map_override: gemmi.Ccp4Map | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     seed_value = resolve_seed(config)
     set_deterministic(seed_value)
     logger.info("Deterministic seeding enabled (seed={})", seed_value)
 
-    inputs = load_inputs(config)
+    inputs = load_inputs(config, target_map_override=target_map_override)
     output_dir = (
         Path(config.panddamap.output_dir)
         if Path(config.panddamap.output_dir).is_absolute()

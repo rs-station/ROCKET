@@ -19,6 +19,7 @@ def run_panddamap_refinement(
     config: RocketRefinmentConfig | str,
     starting_bias: torch.Tensor | None = None,
     starting_weights: torch.Tensor | None = None,
+    target_map_override=None,
 ) -> RocketRefinmentConfig:
     if isinstance(config, str):
         config = RocketRefinmentConfig.from_yaml_file(config)
@@ -26,7 +27,7 @@ def run_panddamap_refinement(
     seed_value = pipeline.resolve_seed(config)
     pipeline.set_deterministic(seed_value)
     logger.info("Deterministic seeding enabled (seed={})", seed_value)
-    inputs = pipeline.load_inputs(config)
+    inputs = pipeline.load_inputs(config, target_map_override=target_map_override)
     engine, output_dir, run_note = pipeline.build_engine(config, inputs)
     results, _, _ = pipeline.run_engine_with_predictor(
         config,
@@ -50,16 +51,22 @@ def main() -> None:
     config = RocketRefinmentConfig.from_yaml_file(args.config)
     starting_bias = None
     starting_weights = None
+    target_map_override = None
+    if config.panddamap.preprocess_target_map:
+        logger.info("Preprocessing target map (denoise + ligand mask)...")
+        target_map_override = pipeline.preprocess_target_map(config)
     if config.panddamap.run_mse_prepass:
         logger.info("Running MSE prepass refinement...")
         starting_bias, starting_weights = pipeline.run_mseloss_refinement(
             config,
             writeout=config.panddamap.save_mse_biases,
+            target_map_override=target_map_override,
         )
     run_panddamap_refinement(
         config,
         starting_bias=starting_bias,
         starting_weights=starting_weights,
+        target_map_override=target_map_override,
     )
 
 

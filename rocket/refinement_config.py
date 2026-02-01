@@ -43,6 +43,7 @@ class PathConfig(BaseModel):
     template_pdb: str | None = None
     target_map: str | None = None
     input_msa: str | None = None
+    ligand_pdb: str | None = None
     sub_msa_path: str | None = None
     sub_delmat_path: str | None = None
     msa_feat_init_path: str | None = None
@@ -134,6 +135,10 @@ class PanddaMapConfig(BaseModel):
     run_note: str = "panddamap"
     run_mse_prepass: bool = True
     save_mse_biases: bool = False
+    preprocess_target_map: bool = False
+    tv_denoise: bool = False
+    ligand_mask_radius: float = 2.5
+    denoise_high_res_limit: float = 1.8
     save_every_n_iterations: int = 50
     early_stopping_patience: int = 150
     save_best_pdb: bool = True
@@ -188,6 +193,7 @@ class RocketRefinmentConfig(BaseModel):
         "msa_feat_init_path": "paths.msa_feat_init_path",
         "starting_bias": "paths.starting_bias",
         "starting_weights": "paths.starting_weights",
+        "ligand_pdb": "paths.ligand_pdb",
         "uuid_hex": "paths.uuid_hex",
         # Execution
         "cuda_device": "execution.cuda_device",
@@ -231,6 +237,10 @@ class RocketRefinmentConfig(BaseModel):
         "note": "note",
         "run_mse_prepass": "panddamap.run_mse_prepass",
         "save_mse_biases": "panddamap.save_mse_biases",
+        "preprocess_target_map": "panddamap.preprocess_target_map",
+        "tv_denoise": "panddamap.tv_denoise",
+        "ligand_mask_radius": "panddamap.ligand_mask_radius",
+        "denoise_high_res_limit": "panddamap.denoise_high_res_limit",
     }
 
     # Helper methods for backward compatibility
