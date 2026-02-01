@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import os
 
+import torch
+
 os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 
 from loguru import logger
@@ -16,6 +18,8 @@ from rocket.refinement_config import RocketRefinmentConfig
 
 def run_panddamap_refinement(
     config: RocketRefinmentConfig | str,
+    starting_bias: torch.Tensor | None = None,
+    starting_weights: torch.Tensor | None = None,
 ) -> RocketRefinmentConfig:
     if isinstance(config, str):
         config = RocketRefinmentConfig.from_yaml_file(config)
@@ -27,7 +31,12 @@ def run_panddamap_refinement(
     engine, output_dir, run_note = pipeline.build_engine(config, inputs)
     model = pipeline.build_model(inputs.device)
     device_features, feature_key, features_at_it_start, optimizer = (
-        pipeline.build_features_and_optimizer(config, inputs)
+        pipeline.build_features_and_optimizer(
+            config,
+            inputs,
+            starting_bias=starting_bias,
+            starting_weights=starting_weights,
+        )
     )
     predictor = pipeline.build_predictor(
         model,
@@ -55,7 +64,22 @@ def main() -> None:
     )
     parser.add_argument("config", type=str, help="Path to YAML config")
     args = parser.parse_args()
-    run_panddamap_refinement(args.config)
+    config = RocketRefinmentConfig.from_yaml_file(args.config)
+    starting_bias = None
+    starting_weights = None
+    if config.panddamap.run_mse_prepass:
+        logger.info("Running MSE prepass refinement...")
+        starting_bias, starting_weights = pipeline.run_mseloss_refinement(
+            config,
+            writeout=config.panddamap.save_mse_biases,
+        )
+        print("$$$$$$ starting_bias mean:", starting_bias.mean().item())
+        print("$$$$ starting_weights mean:", starting_weights.mean().item())
+    run_panddamap_refinement(
+        config,
+        starting_bias=starting_bias,
+        starting_weights=starting_weights,
+    )
 
 
 if __name__ == "__main__":

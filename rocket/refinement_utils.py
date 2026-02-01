@@ -313,7 +313,11 @@ def init_bias(
         (512, num_res, 23), requires_grad=True, device=device
     )
 
-    if starting_weights is not None:
+    if isinstance(starting_weights, torch.Tensor):
+        device_processed_features["msa_feat_weights"] = (
+            starting_weights.detach().to(device=device).requires_grad_(True)
+        )
+    elif starting_weights is not None:
         weight_matches = glob.glob(starting_weights)
         if not weight_matches:
             raise FileNotFoundError(f"No starting weights matched: {starting_weights}")
@@ -333,6 +337,10 @@ def init_bias(
     if recombination_bias is not None:
         device_processed_features["msa_feat_bias"] = (
             recombination_bias.detach().to(device=device).requires_grad_(True)
+        )
+    elif isinstance(starting_bias, torch.Tensor):
+        device_processed_features["msa_feat_bias"] = (
+            starting_bias.detach().to(device=device).requires_grad_(True)
         )
     elif starting_bias is not None:
         bias_matches = glob.glob(starting_bias)

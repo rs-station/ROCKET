@@ -132,6 +132,8 @@ class PanddaMapConfig(BaseModel):
     loss_type: str = "l2"
     output_dir: str = "panddamap_outputs"
     run_note: str = "panddamap"
+    run_mse_prepass: bool = True
+    save_mse_biases: bool = False
     save_every_n_iterations: int = 50
     early_stopping_patience: int = 150
     save_best_pdb: bool = True
@@ -227,6 +229,8 @@ class RocketRefinmentConfig(BaseModel):
         "downsample_ratio": "data.downsample_ratio",
         # Metadata
         "note": "note",
+        "run_mse_prepass": "panddamap.run_mse_prepass",
+        "save_mse_biases": "panddamap.save_mse_biases",
     }
 
     # Helper methods for backward compatibility
