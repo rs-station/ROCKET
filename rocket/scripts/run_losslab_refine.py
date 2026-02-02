@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 
 import torch
 
@@ -49,6 +50,9 @@ def main() -> None:
     parser.add_argument("config", type=str, help="Path to YAML config")
     args = parser.parse_args()
     config = RocketRefinmentConfig.from_yaml_file(args.config)
+    logger.remove()
+    log_level = "DEBUG" if config.execution.verbose else "INFO"
+    logger.add(sys.stderr, level=log_level)
     starting_bias = None
     starting_weights = None
     target_map_override = None

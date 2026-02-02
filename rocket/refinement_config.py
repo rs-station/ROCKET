@@ -131,6 +131,8 @@ class PanddaMapConfig(BaseModel):
     preprocess_target_map: bool = False
     tv_denoise: bool = False
     ligand_mask_radius: float = 2.5
+    ligand_centroid: list[float] | None = None
+    pandda_map_radius: float = 15.0
     denoise_high_res_limit: float = 1.8
     mse_selection: str = "BB"
     save_every_n_iterations: int = 50
@@ -227,6 +229,8 @@ class RocketRefinmentConfig(BaseModel):
         "preprocess_target_map": "panddamap.preprocess_target_map",
         "tv_denoise": "panddamap.tv_denoise",
         "ligand_mask_radius": "panddamap.ligand_mask_radius",
+        "ligand_centroid": "panddamap.ligand_centroid",
+        "pandda_map_radius": "panddamap.pandda_map_radius",
         "denoise_high_res_limit": "panddamap.denoise_high_res_limit",
         "mse_selection": "panddamap.mse_selection",
     }

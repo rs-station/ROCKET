@@ -150,14 +150,16 @@ def build_loss_function(
     moving_pdb,
     device: str,
     loss_type: str,
+    mask_center: np.ndarray | None = None,
+    mask_radius: float | None = None,
 ) -> RealSpaceLoss:
     return RealSpaceLoss(
         target_map=target_map,
         pdb_obj=moving_pdb,
         device=device,
         loss_type=loss_type,
-        mask_center=None,
-        mask_radius=None,
+        mask_center=mask_center,
+        mask_radius=mask_radius,
     )
 
 
@@ -168,6 +170,7 @@ def build_engine(
 ) -> tuple[RefinementEngine, Path, str]:
     output_dir, run_note = rk_io.get_output_dir_and_note(config, inputs.base_dir)
 
+    base_tags = list(config.panddamap.wandb_tags or [])
     losslab_config = RefinementConfig(
         num_iterations=config.algorithm.iterations,
         num_runs=config.execution.num_of_runs,
@@ -187,7 +190,7 @@ def build_engine(
         wandb_entity=config.panddamap.wandb_entity,
         wandb_project=config.panddamap.wandb_project,
         wandb_name=config.panddamap.wandb_name,
-        wandb_tags=config.panddamap.wandb_tags,
+        wandb_tags=base_tags + ["realspace"],
         wandb_notes=config.panddamap.wandb_notes,
     )
 
@@ -206,11 +209,22 @@ def build_engine(
         inputs.device,
         dmin=dmin,
     )
+    mask_center = None
+    if config.panddamap.ligand_centroid:
+        mask_center = np.array(config.panddamap.ligand_centroid, dtype=float)
+    else:
+        logger.warning("panddamap.ligand_centroid is null; mask center disabled")
+    mask_radius = config.panddamap.pandda_map_radius
+    if mask_radius is None:
+        logger.warning("panddamap.pandda_map_radius is null; defaulting to 15.0")
+        mask_radius = 15.0
     loss_fn = build_loss_function(
         inputs.target_map,
         moving_pdb,
         inputs.device,
         config.panddamap.loss_type,
+        mask_center=mask_center,
+        mask_radius=mask_radius,
     )
     engine = RefinementEngine(
         config=losslab_config,
@@ -499,6 +513,7 @@ def run_mseloss_refinement(
     )
     run_note = f"{config.note or config.panddamap.run_note or 'panddamap'}_mse"
 
+    base_tags = list(config.panddamap.wandb_tags or [])
     losslab_config = RefinementConfig(
         num_iterations=config.algorithm.iterations,
         num_runs=config.execution.num_of_runs,
@@ -518,7 +533,7 @@ def run_mseloss_refinement(
         wandb_entity=config.panddamap.wandb_entity,
         wandb_project=config.panddamap.wandb_project,
         wandb_name=config.panddamap.wandb_name,
-        wandb_tags=config.panddamap.wandb_tags,
+        wandb_tags=base_tags + ["mse"],
         wandb_notes=config.panddamap.wandb_notes,
     )
 

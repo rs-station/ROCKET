@@ -68,7 +68,6 @@ def cli_runconfig():
         )
         or ""
     )
-    config.paths.template_pdb = config.paths.input_pdb or None
     config.paths.target_map = _auto_find(
         input_dir,
         ["*masked*.ccp4", "*masked*.map", "*.ccp4", "*.map"],
