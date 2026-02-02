@@ -355,6 +355,8 @@ def _update_engine_with_moving_pdb(
     )
     if hasattr(engine.loss_fn, "pdb_obj"):
         engine.loss_fn.pdb_obj = moving_pdb
+        if hasattr(engine.loss_fn, "set_pdb_obj"):
+            engine.loss_fn.set_pdb_obj(moving_pdb)
         with contextlib.suppress(Exception):
             engine.loss_fn.alignment_indices = np.arange(len(moving_pdb.atom_pos))
 
