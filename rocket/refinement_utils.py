@@ -2,6 +2,7 @@ import glob
 import os
 import pickle
 import re
+from pathlib import Path
 
 import numpy as np
 import skbio
@@ -94,7 +95,7 @@ def build_processed_features_from_alignment(
             processed_features, device=device
         )
 
-    return processed_features
+    return processed_features, raw_features, feature_processor
 
 
 def number_to_letter(n):
@@ -253,6 +254,14 @@ def init_processed_dict(
     PRESET="model_1_ptm",
     postfix="processed_feats.pickle",
     processed_feats_path: str | None = None,
+    output_pdb_path: str | Path | None = None,
+    outputs: dict | None = None,
+    raw_feature_dict: dict | None = None,
+    feature_processor=None,
+    multimer_ri_gap: int = 200,
+    subtract_plddt: bool = False,
+    processed_feature_dict_override: dict | None = None,
+    write_pdb_only: bool = False,
 ):
     if bias_version != 3:
         raise ValueError("Only bias_version=3 is supported.")
@@ -276,6 +285,51 @@ def init_processed_dict(
                 )
             with open(input_glob[0], "rb") as file:
                 processed_features = pickle.load(file)
+
+    if write_pdb_only:
+        if (
+            output_pdb_path is None
+            or outputs is None
+            or raw_feature_dict is None
+            or feature_processor is None
+            or processed_feature_dict_override is None
+        ):
+            raise ValueError(
+                "output_pdb_path, outputs, raw_feature_dict, feature_processor, "
+                "and processed_feature_dict_override are required for write_pdb_only"
+            )
+        from openfold.np import protein
+        from openfold.utils.script_utils import prep_output
+        from openfold.utils.tensor_utils import tensor_tree_map
+
+        def _to_numpy_last_recycle(val):
+            if torch.is_tensor(val):
+                val = val.detach().cpu()
+            val = np.array(val)
+            return val[..., -1] if val.ndim > 0 else val
+
+        processed_np = tensor_tree_map(
+            _to_numpy_last_recycle,
+            processed_feature_dict_override,
+        )
+        out_np = tensor_tree_map(
+            lambda x: np.array(x.detach().cpu()) if torch.is_tensor(x) else x,
+            outputs,
+        )
+        unrelaxed_protein = prep_output(
+            out_np,
+            processed_np,
+            raw_feature_dict,
+            feature_processor,
+            PRESET,
+            multimer_ri_gap=multimer_ri_gap,
+            subtract_plddt=subtract_plddt,
+        )
+        output_pdb_path = Path(output_pdb_path)
+        output_pdb_path.parent.mkdir(parents=True, exist_ok=True)
+        output_pdb_path.write_text(protein.to_pdb(unrelaxed_protein))
+
+        return None, None, None
 
     device_processed_features = rk_utils.move_tensors_to_device(
         processed_features, device=device

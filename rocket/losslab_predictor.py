@@ -38,6 +38,8 @@ class OpenFoldPredictor:
         self.prevs = None
         self._logged_bias_stats = False
         self.bias = bias
+        self.last_outputs = None
+        self.last_features = None
 
     def __call__(self) -> torch.Tensor:
         """Return [N, 4] tensor: [x, y, z, confidence]."""
@@ -71,6 +73,12 @@ class OpenFoldPredictor:
                 num_iters=iter_recycles,
                 bias=self.bias,
             )
+
+        self.last_outputs = outputs
+        self.last_features = {
+            k: v.detach().clone() if torch.is_tensor(v) else v
+            for k, v in self.features.items()
+        }
 
         xyz_orth_sfc, plddts = rk_coordinates.extract_allatoms(
             outputs,

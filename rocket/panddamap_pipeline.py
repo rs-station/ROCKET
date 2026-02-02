@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,6 +13,7 @@ import torch
 from loguru import logger
 from LossLab import RealSpaceLoss, RefinementConfig, RefinementEngine
 from LossLab.losses.mse import MSECoordinatesLoss
+from LossLab.refinement.trajectory import TrajectoryWriter
 from LossLab.utils.map_utils import (
     denoise_and_mask_ccp4_map,
     parse_pdb_coords,
@@ -32,8 +34,8 @@ class RefinementInputs:
     input_dir: Path
     target_map_path: Path
     target_map: object
-    input_pdb_path: Path
-    input_pdb: object
+    reference_pdb_path: Path
+    reference_pdb: object
     reference_coords: torch.Tensor
 
 
@@ -101,11 +103,11 @@ def load_inputs(
     target_map_path = rk_io.resolve_target_map(config)
     target_map = target_map_override or rk_io.load_target_map(target_map_path)
 
-    input_pdb_path = rk_io.resolve_input_pdb(config)
-    input_pdb = rk_io.load_input_pdb(input_pdb_path, target_map)
+    reference_pdb_path = rk_io.resolve_input_pdb(config)
+    reference_pdb = rk_io.load_input_pdb(reference_pdb_path, target_map)
 
     reference_coords = torch.tensor(
-        input_pdb.atom_pos,
+        reference_pdb.atom_pos,
         device=device,
         dtype=torch.float32,
     )
@@ -116,20 +118,21 @@ def load_inputs(
         input_dir=input_dir,
         target_map_path=target_map_path,
         target_map=target_map,
-        input_pdb_path=input_pdb_path,
-        input_pdb=input_pdb,
+        reference_pdb_path=reference_pdb_path,
+        reference_pdb=reference_pdb,
         reference_coords=reference_coords,
     )
 
 
 def build_structure_factor_calculator(
-    input_pdb,
+    moving_pdb,
     target_map,
     device: str,
+    dmin: float,
 ) -> sfc.SFcalculator:
     structure_factor_calc = sfc.SFcalculator(
-        input_pdb,
-        dmin=1.8,
+        moving_pdb,
+        dmin=dmin,
         mode="xray",
         device=device,
     )
@@ -144,13 +147,13 @@ def build_structure_factor_calculator(
 
 def build_loss_function(
     target_map,
-    input_pdb,
+    moving_pdb,
     device: str,
     loss_type: str,
 ) -> RealSpaceLoss:
     return RealSpaceLoss(
         target_map=target_map,
-        pdb_obj=input_pdb,
+        pdb_obj=moving_pdb,
         device=device,
         loss_type=loss_type,
         mask_center=None,
@@ -161,6 +164,7 @@ def build_loss_function(
 def build_engine(
     config: RocketRefinmentConfig,
     inputs: RefinementInputs,
+    moving_pdb=None,
 ) -> tuple[RefinementEngine, Path, str]:
     output_dir, run_note = rk_io.get_output_dir_and_note(config, inputs.base_dir)
 
@@ -190,14 +194,21 @@ def build_engine(
     if config.algorithm.bias_version != 3:
         raise ValueError("Only bias_version=3 is supported.")
 
+    if moving_pdb is None:
+        moving_pdb = inputs.reference_pdb
+
+    if config.data.min_resolution is None:
+        raise ValueError("data.min_resolution is required")
+    dmin = config.data.min_resolution
     structure_factor_calc = build_structure_factor_calculator(
-        inputs.input_pdb,
+        moving_pdb,
         inputs.target_map,
         inputs.device,
+        dmin=dmin,
     )
     loss_fn = build_loss_function(
         inputs.target_map,
-        inputs.input_pdb,
+        moving_pdb,
         inputs.device,
         config.panddamap.loss_type,
     )
@@ -205,7 +216,7 @@ def build_engine(
         config=losslab_config,
         loss_function=loss_fn,
         structure_factor_calculator=structure_factor_calc,
-        pdb_template=str(inputs.input_pdb_path),
+        pdb_template=str(inputs.reference_pdb_path),
     )
     return engine, output_dir, run_note
 
@@ -228,40 +239,41 @@ def build_features_and_optimizer(
 ):
     fasta_path = rk_io.resolve_input_fasta(config)
     alignment_dir = rk_io.resolve_alignment_dir(config)
+    raw_feature_dict = None
+    feature_processor = None
+    processed_features_unbiased = None
 
     if fasta_path and alignment_dir:
-        device_features = rkrf_utils.build_processed_features_from_alignment(
-            fasta_path=str(fasta_path),
-            alignment_dir=str(alignment_dir),
-            preset=preset,
-            device=inputs.device,
-            max_recycling_iters=config.algorithm.init_recycling,
-            template_mmcif_dir=config.paths.template_mmcif_dir,
-            kalign_binary_path=config.paths.kalign_binary_path,
-            max_template_date=config.paths.max_template_date,
-            template_max_hits=config.paths.template_max_hits,
-            template_release_dates_path=config.paths.template_release_dates_path,
-            template_obsolete_pdbs_path=config.paths.template_obsolete_pdbs_path,
+        device_features, raw_feature_dict, feature_processor = (
+            rkrf_utils.build_processed_features_from_alignment(
+                fasta_path=str(fasta_path),
+                alignment_dir=str(alignment_dir),
+                preset=preset,
+                device=inputs.device,
+                max_recycling_iters=config.algorithm.init_recycling,
+            )
         )
+        processed_features_unbiased = {
+            k: (v.detach().clone() if torch.is_tensor(v) else np.array(v))
+            for k, v in device_features.items()
+        }
         feature_key = "msa_feat"
         features_at_it_start = device_features[feature_key].detach().clone()
     else:
-        template_pdb_name = (
-            Path(config.paths.template_pdb).name
-            if config.paths.template_pdb
-            else inputs.input_pdb_path.name
-        )
         device_features, feature_key, features_at_it_start = (
             rkrf_utils.init_processed_dict(
                 bias_version=config.algorithm.bias_version,
                 path=str(inputs.input_dir),
                 device=inputs.device,
-                template_pdb=template_pdb_name,
                 target_seq=None,
                 PRESET=preset,
                 processed_feats_path=config.paths.msa_feat_init_path,
             )
         )
+        processed_features_unbiased = {
+            k: (v.detach().clone() if torch.is_tensor(v) else np.array(v))
+            for k, v in device_features.items()
+        }
 
     resolved_bias = (
         starting_bias
@@ -285,14 +297,22 @@ def build_features_and_optimizer(
         starting_weights=resolved_weights,
     )
 
-    return device_features, feature_key, features_at_it_start, optimizer
+    return (
+        device_features,
+        feature_key,
+        features_at_it_start,
+        optimizer,
+        processed_features_unbiased,
+        raw_feature_dict,
+        feature_processor,
+    )
 
 
 def build_predictor(
     model,
     device_features,
     features_at_it_start,
-    input_pdb,
+    moving_pdb,
     feature_key: str,
     bias: bool = True,
 ) -> OpenFoldPredictor:
@@ -300,10 +320,29 @@ def build_predictor(
         model,
         device_features,
         features_at_it_start,
-        input_pdb,
+        moving_pdb,
         config=PredictorConfig(feature_key=feature_key),
         bias=bias,
     )
+
+
+def _update_engine_with_moving_pdb(
+    engine: RefinementEngine,
+    moving_pdb,
+    target_map,
+    device: str,
+    dmin: float,
+) -> None:
+    engine.sfc = build_structure_factor_calculator(
+        moving_pdb,
+        target_map,
+        device,
+        dmin=dmin,
+    )
+    if hasattr(engine.loss_fn, "pdb_obj"):
+        engine.loss_fn.pdb_obj = moving_pdb
+        with contextlib.suppress(Exception):
+            engine.loss_fn.alignment_indices = np.arange(len(moving_pdb.atom_pos))
 
 
 def run_engine_with_predictor(
@@ -315,22 +354,72 @@ def run_engine_with_predictor(
     save_best_biases: bool = False,
 ) -> tuple[dict, torch.Tensor, torch.Tensor]:
     model = build_model(inputs.device)
-    device_features, feature_key, features_at_it_start, optimizer = (
-        build_features_and_optimizer(
-            config,
-            inputs,
-            starting_bias=starting_bias,
-            starting_weights=starting_weights,
-        )
+    (
+        device_features,
+        feature_key,
+        features_at_it_start,
+        optimizer,
+        processed_features_unbiased,
+        raw_feature_dict,
+        feature_processor,
+    ) = build_features_and_optimizer(
+        config,
+        inputs,
+        starting_bias=starting_bias,
+        starting_weights=starting_weights,
     )
     predictor = build_predictor(
         model,
         device_features,
         features_at_it_start,
-        inputs.input_pdb,
+        inputs.reference_pdb,
         feature_key,
         bias=True,
     )
+
+    predictor()
+    if raw_feature_dict is None or feature_processor is None:
+        raise ValueError(
+            "raw_feature_dict and feature_processor are required to write "
+            "the initial PDB; provide fasta/alignment inputs."
+        )
+    moving_pdb_path = Path(engine.output_dir) / "initial_prediction_unrelaxed.pdb"
+    rkrf_utils.init_processed_dict(
+        bias_version=config.algorithm.bias_version,
+        path=str(inputs.input_dir),
+        device=inputs.device,
+        PRESET="model_1_ptm",
+        output_pdb_path=moving_pdb_path,
+        outputs=getattr(predictor, "last_outputs", None),
+        raw_feature_dict=raw_feature_dict,
+        feature_processor=feature_processor,
+        processed_feature_dict_override=processed_features_unbiased,
+        multimer_ri_gap=200,
+        subtract_plddt=False,
+        write_pdb_only=True,
+    )
+    moving_pdb = rk_io.load_input_pdb(moving_pdb_path, inputs.target_map)
+    if engine.config.save_best_pdb or engine.config.save_trajectory_pdb:
+        engine.trajectory_writer = TrajectoryWriter(
+            output_dir=engine.output_dir,
+            pdb_template_path=moving_pdb_path,
+            save_interval=engine.config.save_trajectory_interval,
+            wandb_logger=engine.wandb_logger,
+        )
+    if config.data.min_resolution is None:
+        raise ValueError("data.min_resolution is required")
+    dmin = config.data.min_resolution
+    _update_engine_with_moving_pdb(
+        engine,
+        moving_pdb,
+        inputs.target_map,
+        inputs.device,
+        dmin=dmin,
+    )
+    predictor.pdb_obj = moving_pdb
+
+    if isinstance(engine.loss_fn, MSECoordinatesLoss):
+        engine.loss_fn.set_moving_pdb(moving_pdb)
 
     best_state: dict[str, torch.Tensor | None] = {
         "bias": None,
@@ -349,8 +438,21 @@ def run_engine_with_predictor(
         if save_callback is not None:
             save_callback(run_id=run_id, iteration=iteration, loss=loss)
 
+    moving_reference_coords = torch.tensor(
+        inputs.reference_pdb.atom_pos,
+        device=inputs.device,
+        dtype=torch.float32,
+    )
+    try:
+        common_ref_idx, common_mov_idx = rkrf_utils.get_common_ca_ind(
+            inputs.reference_pdb, moving_pdb
+        )
+        engine.alignment_indices_reference = np.array(common_ref_idx)
+        engine.alignment_indices_moving = np.array(common_mov_idx)
+    except Exception as exc:
+        logger.warning("Failed to compute common CA indices: {}", exc)
     results = engine.run(
-        reference_coordinates=inputs.reference_coords,
+        reference_coordinates=moving_reference_coords,
         prediction_callback=predictor,
         optimizer=optimizer,
         best_state_callback=_best_state_callback,
@@ -423,13 +525,16 @@ def run_mseloss_refinement(
     loss_fn = MSECoordinatesLoss(
         reference_coordinates=inputs.reference_coords,
         device=inputs.device,
+        reference_pdb=inputs.reference_pdb,
+        moving_pdb=inputs.reference_pdb,
+        selection=config.panddamap.mse_selection,
     )
 
     engine = RefinementEngine(
         config=losslab_config,
         loss_function=loss_fn,
         structure_factor_calculator=None,
-        pdb_template=str(inputs.input_pdb_path),
+        pdb_template=str(inputs.reference_pdb_path),
     )
 
     results, bias_tensor, weights_tensor = run_engine_with_predictor(

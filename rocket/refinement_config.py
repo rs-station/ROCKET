@@ -34,13 +34,6 @@ class PathConfig(BaseModel):
     input_pdb: str = ""
     input_fasta: str | None = None
     alignment_dir: str | None = None
-    template_mmcif_dir: str | None = None
-    template_release_dates_path: str | None = None
-    template_obsolete_pdbs_path: str | None = None
-    kalign_binary_path: str | None = None
-    max_template_date: str | None = None
-    template_max_hits: int | None = None
-    template_pdb: str | None = None
     target_map: str | None = None
     input_msa: str | None = None
     ligand_pdb: str | None = None
@@ -139,6 +132,7 @@ class PanddaMapConfig(BaseModel):
     tv_denoise: bool = False
     ligand_mask_radius: float = 2.5
     denoise_high_res_limit: float = 1.8
+    mse_selection: str = "BB"
     save_every_n_iterations: int = 50
     early_stopping_patience: int = 150
     save_best_pdb: bool = True
@@ -176,17 +170,10 @@ class RocketRefinmentConfig(BaseModel):
         "path": "paths.path",
         "input_dir": "paths.input_dir",
         "file_id": "paths.file_id",
-        "template_pdb": "paths.template_pdb",
         "input_msa": "paths.input_msa",
         "input_pdb": "paths.input_pdb",
         "input_fasta": "paths.input_fasta",
         "alignment_dir": "paths.alignment_dir",
-        "template_mmcif_dir": "paths.template_mmcif_dir",
-        "template_release_dates_path": "paths.template_release_dates_path",
-        "template_obsolete_pdbs_path": "paths.template_obsolete_pdbs_path",
-        "kalign_binary_path": "paths.kalign_binary_path",
-        "max_template_date": "paths.max_template_date",
-        "template_max_hits": "paths.template_max_hits",
         "target_map": "paths.target_map",
         "sub_msa_path": "paths.sub_msa_path",
         "sub_delmat_path": "paths.sub_delmat_path",
@@ -241,6 +228,7 @@ class RocketRefinmentConfig(BaseModel):
         "tv_denoise": "panddamap.tv_denoise",
         "ligand_mask_radius": "panddamap.ligand_mask_radius",
         "denoise_high_res_limit": "panddamap.denoise_high_res_limit",
+        "mse_selection": "panddamap.mse_selection",
     }
 
     # Helper methods for backward compatibility
