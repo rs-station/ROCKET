@@ -23,6 +23,7 @@ from openfold.config import model_config
 import rocket
 from rocket import io as rk_io
 from rocket import refinement_utils as rkrf_utils
+from rocket import utils as rk_utils
 from rocket.losslab_predictor import OpenFoldPredictor, PredictorConfig
 from rocket.refinement_config import RocketRefinmentConfig
 
@@ -467,9 +468,19 @@ def run_engine_with_predictor(
         engine.alignment_indices_moving = np.array(common_mov_idx)
     except Exception as exc:
         logger.warning("Failed to compute common CA indices: {}", exc)
+
+    def _predict_with_pseudob():
+        prediction = predictor()
+        if prediction is None or prediction.shape[-1] < 4:
+            return prediction
+        coords = prediction[:, :3]
+        conf = prediction[:, 3]
+        pseudo_b = rk_utils.plddt2pseudoB_pt(conf)
+        return torch.cat([coords, pseudo_b.unsqueeze(-1)], dim=-1)
+
     results = engine.run(
         reference_coordinates=moving_reference_coords,
-        prediction_callback=predictor,
+        prediction_callback=_predict_with_pseudob,
         optimizer=optimizer,
         best_state_callback=_best_state_callback,
     )
