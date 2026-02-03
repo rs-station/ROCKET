@@ -34,6 +34,18 @@ High-level steps:
    - If no alignments or pickle are present and `input_fasta` is provided, it queries the MMseqs2 server to generate MSAs.
    - Runs real-space loss on the target map.
 
+### Reusing biases from a previous run
+
+If you want to start from previously optimized bias tensors, set these paths
+in your YAML under `paths`:
+
+- `starting_bias`: path to a saved `msa_feat_bias` tensor (.pt)
+- `starting_weights`: path to a saved `msa_feat_weights` tensor (.pt)
+
+These will be loaded and used to initialize the optimizer state in the next run.
+You can point them at artifacts from a prior refinement output directory (e.g.
+`best_msa_bias.pt` and `best_feat_weights.pt`). For example, if you already have a reference unbound state refined from a previous MSE Prepass, anytime you have a dataset from that target you can load them in and skip another prepass.
+
 ## Add-ons
 
 ### W&B logging
@@ -51,6 +63,8 @@ Set these in `paths`:
 - `mmseqs2_use_env`
 - `mmseqs2_use_filter`
 - `mmseqs2_output_dir`
+
+
 
 ## References
 
