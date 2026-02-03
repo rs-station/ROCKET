@@ -22,12 +22,30 @@ You must provide **one** of the following:
 
 If none are available, the run will stop with an error.
 
-## Pandda map masking and gradient focus
+## Pandda map masking vs gradient masking
 
-- `panddamap.ligand_centroid`: Center of spherical mask (list of three floats).
+There are two distinct masks that affect refinement:
+
+### 1) Loss mask (map comparison)
+- `panddamap.ligand_centroid`: Center of the spherical mask (list of three floats).
 - `panddamap.pandda_map_radius`: Radius in Angstroms (default 15.0).
 
-These are used to construct a spherical mask for map comparison. If `ligand_centroid` is null, the map mask is disabled.
+This mask limits **which voxels** in the target and model maps are compared
+for the real-space loss. It does not directly change the structure factors
+or which atoms contribute to the model map.
+
+If `panddamap.ligand_centroid` is null, the loss mask is disabled and the
+loss compares the full map.
+
+### 2) Gradient mask (residue-level)
+The same `ligand_centroid` and `pandda_map_radius` are also used to restrict
+**which residues receive gradients** during map-based refinement:
+
+- Any residue with **at least one atom** inside the spherical radius is
+	allowed to receive gradients.
+- All other residues are detached from the computational graph.
+
+This prevents gradients from propagating to regions far from the ligand site.
 
 ## Preprocessing the target map
 
