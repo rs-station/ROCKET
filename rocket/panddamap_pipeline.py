@@ -22,6 +22,7 @@ from openfold.config import model_config
 
 import rocket
 from rocket import io as rk_io
+from rocket import msa_server as rk_msa_server
 from rocket import refinement_utils as rkrf_utils
 from rocket import utils as rk_utils
 from rocket.losslab_predictor import OpenFoldPredictor, PredictorConfig
@@ -258,6 +259,17 @@ def build_features_and_optimizer(
     feature_processor = None
     processed_features_unbiased = None
 
+    if alignment_dir is not None:
+        alignment_dir = Path(alignment_dir)
+        has_alignment_files = alignment_dir.is_dir() and any(
+            alignment_dir.glob("*.a3m")
+        )
+        has_alignment_files = has_alignment_files or any(alignment_dir.glob("*.sto"))
+        if not has_alignment_files:
+            alignment_dir = None
+
+    has_processed_feats = bool(config.paths.msa_feat_init_path)
+
     if fasta_path and alignment_dir:
         device_features, raw_feature_dict, feature_processor = (
             rkrf_utils.build_processed_features_from_alignment(
@@ -275,20 +287,51 @@ def build_features_and_optimizer(
         feature_key = "msa_feat"
         features_at_it_start = device_features[feature_key].detach().clone()
     else:
-        device_features, feature_key, features_at_it_start = (
-            rkrf_utils.init_processed_dict(
-                bias_version=config.algorithm.bias_version,
-                path=str(inputs.input_dir),
-                device=inputs.device,
-                target_seq=None,
-                PRESET=preset,
-                processed_feats_path=config.paths.msa_feat_init_path,
+        if fasta_path and not has_processed_feats:
+            mmseqs_out = Path(inputs.input_dir) / config.paths.mmseqs2_output_dir
+            alignment_dir = rk_msa_server.query_mmseqs2_server(
+                fasta_path=str(fasta_path),
+                output_dir=mmseqs_out,
+                user_agent=config.paths.mmseqs2_user_agent,
+                host_url=config.paths.mmseqs2_host_url,
+                use_env=config.paths.mmseqs2_use_env,
+                use_filter=config.paths.mmseqs2_use_filter,
             )
-        )
-        processed_features_unbiased = {
-            k: (v.detach().clone() if torch.is_tensor(v) else np.array(v))
-            for k, v in device_features.items()
-        }
+            device_features, raw_feature_dict, feature_processor = (
+                rkrf_utils.build_processed_features_from_alignment(
+                    fasta_path=str(fasta_path),
+                    alignment_dir=str(alignment_dir),
+                    preset=preset,
+                    device=inputs.device,
+                    max_recycling_iters=config.algorithm.init_recycling,
+                )
+            )
+            processed_features_unbiased = {
+                k: (v.detach().clone() if torch.is_tensor(v) else np.array(v))
+                for k, v in device_features.items()
+            }
+            feature_key = "msa_feat"
+            features_at_it_start = device_features[feature_key].detach().clone()
+        else:
+            if not has_processed_feats:
+                raise ValueError(
+                    "No alignments and no msa_feat_init_path. "
+                    "Provide input_fasta for mmseqs2 or a processed feature pickle."
+                )
+            device_features, feature_key, features_at_it_start = (
+                rkrf_utils.init_processed_dict(
+                    bias_version=config.algorithm.bias_version,
+                    path=str(inputs.input_dir),
+                    device=inputs.device,
+                    target_seq=None,
+                    PRESET=preset,
+                    processed_feats_path=config.paths.msa_feat_init_path,
+                )
+            )
+            processed_features_unbiased = {
+                k: (v.detach().clone() if torch.is_tensor(v) else np.array(v))
+                for k, v in device_features.items()
+            }
 
     resolved_bias = (
         starting_bias

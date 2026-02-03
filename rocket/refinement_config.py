@@ -42,6 +42,11 @@ class PathConfig(BaseModel):
     msa_feat_init_path: str | None = None
     starting_bias: str | None = None
     starting_weights: str | None = None
+    mmseqs2_host_url: str = "https://api.colabfold.com"
+    mmseqs2_user_agent: str = "rocket"
+    mmseqs2_use_env: bool = True
+    mmseqs2_use_filter: bool = True
+    mmseqs2_output_dir: str = "mmseqs2_alignments"
     uuid_hex: str | None = None
 
 
@@ -183,6 +188,11 @@ class RocketRefinmentConfig(BaseModel):
         "starting_bias": "paths.starting_bias",
         "starting_weights": "paths.starting_weights",
         "ligand_pdb": "paths.ligand_pdb",
+        "mmseqs2_host_url": "paths.mmseqs2_host_url",
+        "mmseqs2_user_agent": "paths.mmseqs2_user_agent",
+        "mmseqs2_use_env": "paths.mmseqs2_use_env",
+        "mmseqs2_use_filter": "paths.mmseqs2_use_filter",
+        "mmseqs2_output_dir": "paths.mmseqs2_output_dir",
         "uuid_hex": "paths.uuid_hex",
         # Execution
         "cuda_device": "execution.cuda_device",
