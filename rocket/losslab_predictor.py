@@ -41,8 +41,12 @@ class OpenFoldPredictor:
         self.last_outputs = None
         self.last_features = None
 
-    def __call__(self) -> torch.Tensor:
-        """Return [N, 4] tensor: [x, y, z, confidence]."""
+    def __call__(self, *, map_to_pdb: bool = True) -> torch.Tensor | None:
+        """Return [N, 4] tensor: [x, y, z, confidence].
+
+        If map_to_pdb is False, only updates cached outputs/features and
+        skips PDB topology mapping.
+        """
         self.features[self.config.feature_key] = self.features_backup.detach().clone()
 
         init_recycles = self.config.init_recycles
@@ -79,6 +83,9 @@ class OpenFoldPredictor:
             k: v.detach().clone() if torch.is_tensor(v) else v
             for k, v in self.features.items()
         }
+
+        if not map_to_pdb:
+            return None
 
         xyz_orth_sfc, plddts = rk_coordinates.extract_allatoms(
             outputs,

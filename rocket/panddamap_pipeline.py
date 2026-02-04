@@ -394,7 +394,7 @@ def run_engine_with_predictor(
         bias=True,
     )
 
-    predictor()
+    predictor(map_to_pdb=False)
     if raw_feature_dict is None or feature_processor is None:
         raise ValueError(
             "raw_feature_dict and feature_processor are required to write "
