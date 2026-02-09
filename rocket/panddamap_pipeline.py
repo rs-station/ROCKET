@@ -14,6 +14,7 @@ from loguru import logger
 from LossLab import RealSpaceLoss, RefinementConfig, RefinementEngine
 from LossLab.losses.mse import MSECoordinatesLoss
 from LossLab.refinement.trajectory import TrajectoryWriter
+from LossLab.utils.geometry import kabsch_align
 from LossLab.utils.map_utils import (
     denoise_and_mask_ccp4_map,
     parse_pdb_coords,
@@ -395,6 +396,12 @@ def run_engine_with_predictor(
     )
 
     predictor(map_to_pdb=False)
+    prediction_outputs = getattr(predictor, "last_outputs", None)
+    if prediction_outputs is None:
+        raise ValueError(
+            "Predictor produced no outputs; cannot write "
+            "initial_prediction_unrelaxed.pdb."
+        )
     if raw_feature_dict is None or feature_processor is None:
         raise ValueError(
             "raw_feature_dict and feature_processor are required to write "
@@ -407,7 +414,7 @@ def run_engine_with_predictor(
         device=inputs.device,
         PRESET="model_1_ptm",
         output_pdb_path=moving_pdb_path,
-        outputs=getattr(predictor, "last_outputs", None),
+        outputs=prediction_outputs,
         raw_feature_dict=raw_feature_dict,
         feature_processor=feature_processor,
         processed_feature_dict_override=processed_features_unbiased,
@@ -460,6 +467,8 @@ def run_engine_with_predictor(
         device=inputs.device,
         dtype=torch.float32,
     )
+    common_ref_idx = None
+    common_mov_idx = None
     try:
         common_ref_idx, common_mov_idx = rkrf_utils.get_common_ca_ind(
             inputs.reference_pdb, moving_pdb
@@ -469,14 +478,64 @@ def run_engine_with_predictor(
     except Exception as exc:
         logger.warning("Failed to compute common CA indices: {}", exc)
 
+    atom_grad_mask = None
+    if config.panddamap.ligand_centroid and config.panddamap.pandda_map_radius:
+        ligand_center = torch.tensor(
+            config.panddamap.ligand_centroid,
+            device=inputs.device,
+            dtype=torch.float32,
+        )
+        atom_pos_source = (
+            moving_pdb.atom_pos_orth
+            if hasattr(moving_pdb, "atom_pos_orth")
+            else moving_pdb.atom_pos
+        )
+        atom_pos = torch.tensor(
+            atom_pos_source,
+            device=inputs.device,
+            dtype=torch.float32,
+        )
+        if common_ref_idx is not None and common_mov_idx is not None:
+            try:
+                atom_pos = kabsch_align(
+                    atom_pos,
+                    moving_reference_coords,
+                    indices_moving=np.array(common_mov_idx),
+                    indices_reference=np.array(common_ref_idx),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to Kabsch-align atom positions for mask: {}",
+                    exc,
+                )
+        distances = torch.norm(atom_pos - ligand_center, dim=-1)
+        atom_grad_mask = (distances <= config.panddamap.pandda_map_radius).float()
+        atom_grad_mask = atom_grad_mask.unsqueeze(-1)
+        logger.info(
+            "Applying atom gradient mask ({} of {} atoms within radius).",
+            int(atom_grad_mask.sum().item()),
+            int(atom_grad_mask.numel()),
+        )
+        logger.info(
+            "Gradient mask centroid={}, radius={}",
+            config.panddamap.ligand_centroid,
+            config.panddamap.pandda_map_radius,
+        )
+
     def _predict_with_pseudob():
         prediction = predictor()
         if prediction is None or prediction.shape[-1] < 4:
             return prediction
         coords = prediction[:, :3]
         conf = prediction[:, 3]
+        if atom_grad_mask is not None and atom_grad_mask.shape[0] == coords.shape[0]:
+            coords = coords * atom_grad_mask + coords.detach() * (1.0 - atom_grad_mask)
         pseudo_b = rk_utils.plddt2pseudoB_pt(conf)
         return torch.cat([coords, pseudo_b.unsqueeze(-1)], dim=-1)
+
+    if torch.cuda.is_available() and str(inputs.device).startswith("cuda"):
+        with contextlib.suppress(Exception):
+            torch.cuda.reset_peak_memory_stats()
 
     results = engine.run(
         reference_coordinates=moving_reference_coords,
@@ -484,6 +543,13 @@ def run_engine_with_predictor(
         optimizer=optimizer,
         best_state_callback=_best_state_callback,
     )
+
+    if torch.cuda.is_available() and str(inputs.device).startswith("cuda"):
+        try:
+            peak_mem = torch.cuda.max_memory_allocated()
+            logger.info("Peak CUDA memory allocated: {:.2f} GB", peak_mem / 1e9)
+        except Exception as exc:
+            logger.warning("Failed to read peak CUDA memory: {}", exc)
 
     bias_state = best_state.get("bias")
     weights_state = best_state.get("weights")

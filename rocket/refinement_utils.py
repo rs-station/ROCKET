@@ -266,26 +266,6 @@ def init_processed_dict(
     if bias_version != 3:
         raise ValueError("Only bias_version=3 is supported.")
 
-    processed_features = None
-    if processed_feats_path:
-        with open(processed_feats_path, "rb") as file:
-            processed_features = pickle.load(file)
-    else:
-        prediction_glob = glob.glob(f"{path}/predictions/*{postfix}")
-        if prediction_glob:
-            with open(prediction_glob[0], "rb") as file:
-                processed_features = pickle.load(file)
-        else:
-            input_glob = glob.glob(f"{path}/*{postfix}")
-            if not input_glob:
-                input_glob = glob.glob(f"{path}/*.pickle")
-            if not input_glob:
-                raise FileNotFoundError(
-                    "No processed features found in predictions/ or input dir."
-                )
-            with open(input_glob[0], "rb") as file:
-                processed_features = pickle.load(file)
-
     if write_pdb_only:
         if (
             output_pdb_path is None
@@ -330,6 +310,26 @@ def init_processed_dict(
         output_pdb_path.write_text(protein.to_pdb(unrelaxed_protein))
 
         return None, None, None
+
+    processed_features = None
+    if processed_feats_path:
+        with open(processed_feats_path, "rb") as file:
+            processed_features = pickle.load(file)
+    else:
+        prediction_glob = glob.glob(f"{path}/predictions/*{postfix}")
+        if prediction_glob:
+            with open(prediction_glob[0], "rb") as file:
+                processed_features = pickle.load(file)
+        else:
+            input_glob = glob.glob(f"{path}/*{postfix}")
+            if not input_glob:
+                input_glob = glob.glob(f"{path}/*.pickle")
+            if not input_glob:
+                raise FileNotFoundError(
+                    "No processed features found in predictions/ or input dir."
+                )
+            with open(input_glob[0], "rb") as file:
+                processed_features = pickle.load(file)
 
     device_processed_features = rk_utils.move_tensors_to_device(
         processed_features, device=device
