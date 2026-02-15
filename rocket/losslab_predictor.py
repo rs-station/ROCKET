@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 
 import torch
@@ -16,6 +17,7 @@ class PredictorConfig:
     feature_key: str = "msa_feat"
     init_recycles: int = 1
     iter_recycles: int = 1
+    offload_activations: bool = False
 
 
 class OpenFoldPredictor:
@@ -49,36 +51,54 @@ class OpenFoldPredictor:
         """
         self.features[self.config.feature_key] = self.features_backup.detach().clone()
 
-        init_recycles = self.config.init_recycles
-        iter_recycles = self.config.iter_recycles
-        if self.prevs is None:
-            outputs, self.prevs = self.model(
-                self.features,
-                [None, None, None],
-                num_iters=init_recycles,
-                bias=False,
-            )
-            self.features[self.config.feature_key] = (
-                self.features_backup.detach().clone()
-            )
-            self.prevs = [p.detach() for p in self.prevs]
-            deep_copied_prevs = [p.clone().detach() for p in self.prevs]
-            outputs, _ = self.model(
-                self.features,
-                deep_copied_prevs,
-                num_iters=iter_recycles,
-                bias=self.bias,
-            )
-        else:
-            deep_copied_prevs = [p.clone().detach() for p in self.prevs]
-            outputs, _ = self.model(
-                self.features,
-                deep_copied_prevs,
-                num_iters=iter_recycles,
-                bias=self.bias,
-            )
+        def _detach_outputs(outputs):
+            if isinstance(outputs, dict):
+                return {
+                    k: (v.detach().clone() if torch.is_tensor(v) else v)
+                    for k, v in outputs.items()
+                }
+            if torch.is_tensor(outputs):
+                return outputs.detach().clone()
+            return outputs
 
-        self.last_outputs = outputs
+        grad_context = contextlib.nullcontext() if map_to_pdb else torch.no_grad()
+        offload_context = (
+            torch.autograd.graph.save_on_cpu()
+            if self.config.offload_activations
+            else contextlib.nullcontext()
+        )
+
+        with grad_context, offload_context:
+            init_recycles = self.config.init_recycles
+            iter_recycles = self.config.iter_recycles
+            if self.prevs is None:
+                outputs, self.prevs = self.model(
+                    self.features,
+                    [None, None, None],
+                    num_iters=init_recycles,
+                    bias=False,
+                )
+                self.features[self.config.feature_key] = (
+                    self.features_backup.detach().clone()
+                )
+                self.prevs = [p.detach() for p in self.prevs]
+                deep_copied_prevs = [p.detach() for p in self.prevs]
+                outputs, _ = self.model(
+                    self.features,
+                    deep_copied_prevs,
+                    num_iters=iter_recycles,
+                    bias=self.bias,
+                )
+            else:
+                deep_copied_prevs = [p.detach() for p in self.prevs]
+                outputs, _ = self.model(
+                    self.features,
+                    deep_copied_prevs,
+                    num_iters=iter_recycles,
+                    bias=self.bias,
+                )
+
+        self.last_outputs = _detach_outputs(outputs)
         self.last_features = {
             k: v.detach().clone() if torch.is_tensor(v) else v
             for k, v in self.features.items()

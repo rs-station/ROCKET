@@ -67,9 +67,10 @@ Used only when alignments and processed features are missing and `paths.input_fa
 
 ## MSE prepass (optional)
 
-- `panddamap.run_mse_prepass`: Run an MSE refinement before real-space.
-- `panddamap.mse_selection`: `ALL`, `CA`, or `BB` (default `BB`).
-- `panddamap.save_mse_biases`: Save MSE bias weights for reuse.
+- `panddamap.mse_prepass.enabled`: Run an MSE refinement before real-space.
+- `panddamap.mse_prepass.selection`: `ALL`, `CA`, or `BB` (default `BB`).
+- `panddamap.mse_prepass.save_biases`: Save MSE bias weights for reuse.
+- `panddamap.mse_prepass.first_n_residues`: Optional residue cap for MSE (debug).
 
 ## W&B (optional)
 
@@ -78,6 +79,8 @@ Used only when alignments and processed features are missing and `paths.input_fa
 - `panddamap.wandb_tags`: Tags; `mse` and `realspace` are appended automatically.
 
 ## Run controls
+
+- `algorithm.use_deepspeed_evo_attention`: Enable DeepSpeed evo attention kernels (default true).
 
 - `algorithm.iterations`: Number of iterations per run.
 - `execution.num_of_runs`: Number of runs.

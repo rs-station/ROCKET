@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Any, ClassVar
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # Custom StrEnum implementation for Python < 3.11
@@ -65,6 +65,7 @@ class OptimizationParams(BaseModel):
     smooth_stage_epochs: int | None = 50
     phase2_final_lr: float = 1e-3
     l2_weight: float = 1e-7
+    offload_activations: bool = False
 
 
 # Feature flags
@@ -84,6 +85,7 @@ class AlgorithmConfig(BaseModel):
     iterations: int = 100
     init_recycling: int = 1
     domain_segs: list[int] | None = None
+    use_deepspeed_evo_attention: bool = True
     optimization: OptimizationParams = Field(default_factory=OptimizationParams)
     features: FeatureFlags = Field(default_factory=FeatureFlags)
 
@@ -119,22 +121,27 @@ class DataConfig(BaseModel):
                 ) from err
         return v
 
-    model_config = {"use_enum_values": True}
+    model_config = {"use_enum_values": False}
+
+
+class MSEPrepassConfig(BaseModel):
+    enabled: bool = True
+    save_biases: bool = False
+    selection: str = "BB"
+    first_n_residues: int | None = None
 
 
 class PanddaMapConfig(BaseModel):
     loss_type: str = "l2"
     output_dir: str = "panddamap_outputs"
     run_note: str = "panddamap"
-    run_mse_prepass: bool = True
-    save_mse_biases: bool = False
+    mse_prepass: MSEPrepassConfig = Field(default_factory=MSEPrepassConfig)
     preprocess_target_map: bool = False
     tv_denoise: bool = False
     ligand_mask_radius: float = 2.5
     ligand_centroid: list[float] | None = None
     pandda_map_radius: float = 15.0
     denoise_high_res_limit: float = 1.8
-    mse_selection: str = "BB"
     save_every_n_iterations: int = 50
     early_stopping_patience: int = 150
     save_best_pdb: bool = True
@@ -150,6 +157,31 @@ class PanddaMapConfig(BaseModel):
     wandb_name: str | None = None
     wandb_tags: list[str] = Field(default_factory=list)
     wandb_notes: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_mse_prepass(cls, values: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(values, dict):
+            return values
+        if "mse_prepass" in values:
+            return values
+        if any(
+            k in values
+            for k in (
+                "run_mse_prepass",
+                "save_mse_biases",
+                "mse_selection",
+                "mse_first_n_residues",
+            )
+        ):
+            values = dict(values)
+            values["mse_prepass"] = {
+                "enabled": values.pop("run_mse_prepass", True),
+                "save_biases": values.pop("save_mse_biases", False),
+                "selection": values.pop("mse_selection", "BB"),
+                "first_n_residues": values.pop("mse_first_n_residues", None),
+            }
+        return values
 
 
 # Main configuration class
@@ -193,6 +225,7 @@ class RocketRefinmentConfig(BaseModel):
         "iterations": "algorithm.iterations",
         "init_recycling": "algorithm.init_recycling",
         "domain_segs": "algorithm.domain_segs",
+        "use_deepspeed_evo_attention": "algorithm.use_deepspeed_evo_attention",
         # Optimization
         "additive_learning_rate": "algorithm.optimization.additive_learning_rate",
         "multiplicative_learning_rate": "algorithm.optimization.multiplicative_learning_rate",  # noqa: E501
@@ -224,15 +257,16 @@ class RocketRefinmentConfig(BaseModel):
         "downsample_ratio": "data.downsample_ratio",
         # Metadata
         "note": "note",
-        "run_mse_prepass": "panddamap.run_mse_prepass",
-        "save_mse_biases": "panddamap.save_mse_biases",
+        "run_mse_prepass": "panddamap.mse_prepass.enabled",
+        "save_mse_biases": "panddamap.mse_prepass.save_biases",
         "preprocess_target_map": "panddamap.preprocess_target_map",
         "tv_denoise": "panddamap.tv_denoise",
         "ligand_mask_radius": "panddamap.ligand_mask_radius",
         "ligand_centroid": "panddamap.ligand_centroid",
         "pandda_map_radius": "panddamap.pandda_map_radius",
         "denoise_high_res_limit": "panddamap.denoise_high_res_limit",
-        "mse_selection": "panddamap.mse_selection",
+        "mse_selection": "panddamap.mse_prepass.selection",
+        "mse_first_n_residues": "panddamap.mse_prepass.first_n_residues",
     }
 
     # Helper methods for backward compatibility
