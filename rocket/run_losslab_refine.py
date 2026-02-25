@@ -56,11 +56,10 @@ def main() -> None:
     if config.panddamap.preprocess_target_map:
         logger.info("Preprocessing target map (denoise + ligand mask)...")
         target_map_override = pipeline.preprocess_target_map(config)
-    if config.panddamap.mse_prepass.enabled:
-        logger.info("Running MSE loss prepass refinement...")
+    if config.panddamap.run_mse_prepass:
         starting_bias, starting_weights = pipeline.run_mseloss_refinement(
             config,
-            writeout=config.panddamap.mse_prepass.save_biases,
+            writeout=config.panddamap.save_mse_biases,
             target_map_override=target_map_override,
         )
     run_panddamap_refinement(
