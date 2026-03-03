@@ -38,7 +38,7 @@ class MSABiasAFv1(AlphaFold):
         import_jax_weights_(self, params_path, version=model_version)
         config.globals.use_deepspeed_evo_attention = use_deepspeed_evo_attention
         print("DEEPSPEED IS ", config.globals.use_deepspeed_evo_attention)
-        config.globals.chunk_size = 512
+        # config.globals.chunk_size = null
         print("CHUNKING IS ", config.globals.chunk_size)
         self.eval()  # without this, dropout enabled
 
