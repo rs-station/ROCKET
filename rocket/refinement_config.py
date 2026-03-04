@@ -66,6 +66,7 @@ class OptimizationParams(BaseModel):
     phase2_final_lr: float = 1e-3
     l2_weight: float = 1e-7
     offload_activations: bool = False
+    bf16_evoformer: bool = False
 
 
 # Feature flags

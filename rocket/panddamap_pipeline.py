@@ -241,11 +241,13 @@ def build_model(
     device: str,
     preset: str = "model_1_ptm",
     use_deepspeed_evo_attention: bool = True,
+    bf16_evoformer: bool = False,
 ):
     af_model = rocket.MSABiasAFv3(
         model_config(preset, train=True),
         preset,
         use_deepspeed_evo_attention=use_deepspeed_evo_attention,
+        bf16_evoformer=bf16_evoformer,
     ).to(device)
     af_model.freeze()
     return af_model
@@ -383,6 +385,7 @@ def run_engine_with_predictor(
     model = build_model(
         inputs.device,
         use_deepspeed_evo_attention=config.algorithm.use_deepspeed_evo_attention,
+        bf16_evoformer=config.algorithm.optimization.bf16_evoformer,
     )
     (
         device_features,
@@ -436,6 +439,9 @@ def run_engine_with_predictor(
         write_pdb_only=True,
     )
     moving_pdb = rk_io.load_input_pdb(moving_pdb_path, inputs.target_map)
+    # Preserve spacegroup from reference PDB
+    if hasattr(inputs.reference_pdb, "spacegroup"):
+        moving_pdb.spacegroup = inputs.reference_pdb.spacegroup
     if engine.config.save_best_pdb or engine.config.save_trajectory_pdb:
         engine.trajectory_writer = TrajectoryWriter(
             output_dir=engine.output_dir,

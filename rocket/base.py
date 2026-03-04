@@ -25,6 +25,7 @@ class MSABiasAFv1(AlphaFold):
         preset,
         params_root=None,
         use_deepspeed_evo_attention=True,
+        bf16_evoformer=False,
     ):
         super().__init__(config)
 
@@ -38,8 +39,10 @@ class MSABiasAFv1(AlphaFold):
         import_jax_weights_(self, params_path, version=model_version)
         config.globals.use_deepspeed_evo_attention = use_deepspeed_evo_attention
         print("DEEPSPEED IS ", config.globals.use_deepspeed_evo_attention)
-        # config.globals.chunk_size = null
+        # config.globals.chunk_size = 512
         print("CHUNKING IS ", config.globals.chunk_size)
+        self.bf16_evoformer = bf16_evoformer
+        print("BF16_EVOFORMER IS ", self.bf16_evoformer)
         self.eval()  # without this, dropout enabled
 
         # self.train()
@@ -80,7 +83,27 @@ class MSABiasAFv1(AlphaFold):
     def iteration(self, feats, prevs, _recycle=True, bias=True):
         if bias:
             feats = self._bias(feats)
-        return super().iteration(feats, prevs, _recycle)
+
+        # Optional bf16 test path for Evoformer-heavy iteration.
+        use_bf16 = self.bf16_evoformer and torch.cuda.is_available()
+
+        if not use_bf16:
+            return super().iteration(feats, prevs, _recycle)
+
+        orig_dtype = None
+        if prevs is not None and len(prevs) > 1 and prevs[1] is not None:
+            orig_dtype = prevs[1].dtype
+        elif "msa_feat" in feats and torch.is_tensor(feats["msa_feat"]):
+            orig_dtype = feats["msa_feat"].dtype
+
+        with torch.amp.autocast(device_type="cuda", dtype=torch.bfloat16):
+            outputs, m, z, x, aux = super().iteration(feats, prevs, _recycle)
+
+        if orig_dtype is not None:
+            m = m.to(dtype=orig_dtype)
+            z = z.to(dtype=orig_dtype)
+
+        return outputs, m, z, x, aux
 
     def forward(self, batch, prevs=None, num_iters=1, bias=True):
         if prevs is None:

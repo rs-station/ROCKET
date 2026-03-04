@@ -82,7 +82,7 @@ def load_target_map(target_map_path: Path) -> gemmi.Ccp4Map:
 
 def load_input_pdb(input_pdb_path: Path, target_map: gemmi.Ccp4Map) -> PDBParser:
     input_pdb = PDBParser(str(input_pdb_path))
-    input_pdb.set_spacegroup("P 1")
+    # input_pdb.set_spacegroup("P 1")
     input_pdb.set_unitcell(target_map.grid.unit_cell)
     return input_pdb
 

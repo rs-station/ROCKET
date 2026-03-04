@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 TIME_FORMAT_STR = "%b_%d_%H_%M_%S"
-MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT = 100000
+# MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT = 100000
 
 
 def get_device_from_config(config: "RocketRefinmentConfig") -> str:
@@ -131,7 +131,7 @@ class MemorySnapshotProfiler:
 
         logger.info("Starting GPU memory snapshot recording")
         torch.cuda.memory._record_memory_history(
-            max_entries=MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT
+            # max_entries=MAX_NUM_OF_MEM_EVENTS_PER_SNAPSHOT
         )
         return self
 

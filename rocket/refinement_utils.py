@@ -292,10 +292,17 @@ def init_processed_dict(
             _to_numpy_last_recycle,
             processed_feature_dict_override,
         )
-        out_np = tensor_tree_map(
-            lambda x: np.array(x.detach().cpu()) if torch.is_tensor(x) else x,
-            outputs,
-        )
+
+        def _tensor_to_numpy(x):
+            if torch.is_tensor(x):
+                x_cpu = x.detach().cpu()
+                # Convert bfloat16 to float32 for numpy compatibility
+                if x_cpu.dtype == torch.bfloat16:
+                    x_cpu = x_cpu.float()
+                return np.array(x_cpu)
+            return x
+
+        out_np = tensor_tree_map(_tensor_to_numpy, outputs)
         unrelaxed_protein = prep_output(
             out_np,
             processed_np,
