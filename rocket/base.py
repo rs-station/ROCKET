@@ -39,7 +39,6 @@ class MSABiasAFv1(AlphaFold):
         import_jax_weights_(self, params_path, version=model_version)
         config.globals.use_deepspeed_evo_attention = use_deepspeed_evo_attention
         print("DEEPSPEED IS ", config.globals.use_deepspeed_evo_attention)
-        # config.globals.chunk_size = 512
         print("CHUNKING IS ", config.globals.chunk_size)
         self.bf16_evoformer = bf16_evoformer
         print("BF16_EVOFORMER IS ", self.bf16_evoformer)
