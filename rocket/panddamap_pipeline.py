@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -165,6 +166,152 @@ def build_loss_function(
     )
 
 
+# ---------------------------------------------------------------------------
+# Realspace rigid-body refinement (RBR)
+# ---------------------------------------------------------------------------
+from rocket.coordinates import quaternions_to_SO3  # noqa: E402
+
+
+def _realspace_rbr_lbfgs(
+    loss_fn,
+    sfc,
+    xyz_detached: torch.Tensor,
+    domain_bools: list[np.ndarray],
+    lr: float = 150.0,
+    n_steps: int = 15,
+) -> tuple[list[torch.Tensor], list[torch.Tensor], list[float]]:
+    """Find optimal quaternion rotations and translations via LBFGS against a
+    ``RealSpaceLoss`` (or any LossLab loss with ``.compute(coords, sfc)``).
+
+    Returns the *detached* quaternions and translation vectors so the caller
+    can apply them to gradient-connected coordinates.
+    """
+    n_domains = len(domain_bools)
+    device = xyz_detached.device
+
+    qs = [
+        torch.tensor(
+            [1.0, 0.0, 0.0, 0.0],
+            dtype=torch.float32,
+            device=device,
+            requires_grad=True,
+        )
+        for _ in range(n_domains)
+    ]
+    trans_vecs = [
+        torch.tensor([0.0, 0.0, 0.0], device=device, requires_grad=True)
+        for _ in range(n_domains)
+    ]
+
+    propose_rmcoms = []
+    propose_coms = []
+    for db in domain_bools:
+        com = torch.mean(xyz_detached[db], dim=0)
+        propose_coms.append(com)
+        propose_rmcoms.append(xyz_detached[db] - com)
+
+    optimizer = torch.optim.LBFGS(
+        qs + trans_vecs,
+        lr=lr,
+        line_search_fn="strong_wolfe",
+        tolerance_change=1e-9,
+        max_iter=1,
+    )
+    loss_track: list[float] = []
+
+    def closure():
+        optimizer.zero_grad()
+        temp_model = torch.zeros_like(xyz_detached)
+        for i in range(n_domains):
+            temp_R = quaternions_to_SO3(qs[i])
+            temp_model[domain_bools[i]] = (
+                torch.matmul(propose_rmcoms[i], temp_R)
+                + propose_coms[i]
+                + trans_vecs[i]
+            )
+        result = loss_fn.compute(temp_model, sfc)
+        # compute() may return (loss, metadata); unpack if needed
+        loss = result[0] if isinstance(result, tuple) else result
+        loss.backward()
+        return loss
+
+    t0 = time.time()
+    for _ in range(n_steps):
+        step_loss = optimizer.step(closure)
+        loss_track.append(step_loss.item())
+    elapsed = time.time() - t0
+    logger.debug("LBFGS RBR ({} steps) took {:.3f}s", n_steps, elapsed)
+
+    return qs, trans_vecs, loss_track
+
+
+def realspace_rigidbody_refine(
+    coordinates: torch.Tensor,
+    loss_fn,
+    sfc,
+    domain_segs: list[tuple[int, int]] | None = None,
+    lbfgs: bool = True,
+    lbfgs_lr: float = 150.0,
+) -> tuple[torch.Tensor, list[float]]:
+    """RBR wrapper matching the ``rbr_fn`` protocol expected by
+    ``RefinementEngine._process_coordinates``.
+
+    The LBFGS inner loop finds the optimal rigid-body transform on
+    *detached* coordinates, then the found (frozen) transform is applied
+    to the **original** gradient-connected ``coordinates`` so that
+    gradients still flow back to the MSA biases.
+
+    Parameters
+    ----------
+    coordinates : torch.Tensor  [N, 3]
+    loss_fn : BaseLoss (RealSpaceLoss or similar)
+    sfc : SFcalculator
+    domain_segs : optional domain boundaries
+    lbfgs : use LBFGS (True) or skip (False)
+    lbfgs_lr : learning rate for LBFGS optimiser
+    """
+    if not lbfgs:
+        # No RBR requested — return as-is
+        return coordinates, []
+
+    n_atoms = coordinates.shape[0]
+
+    if domain_segs is not None and len(domain_segs) > 0:
+        # Build domain boolean masks from (start, end) tuples
+        domain_bools = []
+        for start, end in domain_segs:
+            mask = np.zeros(n_atoms, dtype=bool)
+            mask[start:end] = True
+            domain_bools.append(mask)
+    else:
+        # Single domain — all atoms
+        domain_bools = [np.ones(n_atoms, dtype=bool)]
+
+    # 1. Find optimal transform on detached coordinates (no grad to biases)
+    qs, trans_vecs, loss_track = _realspace_rbr_lbfgs(
+        loss_fn,
+        sfc,
+        coordinates.detach(),
+        domain_bools,
+        lr=lbfgs_lr,
+    )
+
+    # 2. Apply the found (detached) transform to the ORIGINAL coordinates
+    #    so that gradients flow through coordinates back to MSA biases.
+    optimized_xyz = torch.zeros_like(coordinates)
+    for i, db in enumerate(domain_bools):
+        propose_com = torch.mean(coordinates[db], dim=0)
+        propose_rmcom = coordinates[db] - propose_com
+        transform_i = quaternions_to_SO3(qs[i]).detach()
+        optimized_xyz[db] = (
+            torch.matmul(propose_rmcom, transform_i)
+            + propose_com
+            + trans_vecs[i].detach()
+        )
+
+    return optimized_xyz, loss_track
+
+
 def build_engine(
     config: RocketRefinmentConfig,
     inputs: RefinementInputs,
@@ -194,6 +341,10 @@ def build_engine(
         wandb_name=config.panddamap.wandb_name,
         wandb_tags=base_tags + ["realspace"],
         wandb_notes=config.panddamap.wandb_notes,
+        use_confidence_alignment_weights=True,
+        use_rigid_body_refinement=True,
+        rbr_use_lbfgs=True,
+        rbr_learning_rate=config.algorithm.optimization.rbr_lbfgs_learning_rate,
     )
 
     if config.algorithm.bias_version != 3:
@@ -232,6 +383,7 @@ def build_engine(
         config=losslab_config,
         loss_function=loss_fn,
         structure_factor_calculator=structure_factor_calc,
+        rbr_function=realspace_rigidbody_refine,
         pdb_template=str(inputs.reference_pdb_path),
     )
     return engine, output_dir, run_note
@@ -608,7 +760,7 @@ def run_mseloss_refinement(
     seed_value = resolve_seed(config)
     set_deterministic(seed_value)
     logger.info("Deterministic seeding enabled (seed={})", seed_value)
-
+    logger.info("Running MSE loss refinement pre-pass...")
     inputs = load_inputs(config, target_map_override=target_map_override)
     output_dir = (
         Path(config.panddamap.output_dir)
@@ -633,6 +785,7 @@ def run_mseloss_refinement(
         save_best_pdb=config.panddamap.save_best_pdb,
         save_trajectory_pdb=config.panddamap.save_trajectory_pdb,
         save_trajectory_interval=config.panddamap.save_trajectory_interval,
+        use_confidence_alignment_weights=True,
         use_wandb=config.panddamap.use_wandb,
         wandb_entity=config.panddamap.wandb_entity,
         wandb_project=config.panddamap.wandb_project,

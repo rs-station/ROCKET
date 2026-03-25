@@ -13,7 +13,7 @@ readme = "README.md" # Assuming you have a README.md, otherwise adjust or remove
 requires-python = ">=3.10" # Specify your minimum supported Python version, adjust if needed
 license = { file = "LICENSE" } 
 authors = [
-    { name = "Your Name", email = "your.email@example.com" },
+    { name = "Alisia Fadini", email = "af3659@cumc.columbia.edu" },
 ]
 keywords = ["bioinformatics", "protein structure", "openfold", "crystallography", "refinement"] # Optional: Add relevant keywords
 classifiers = [ # Optional: PyPI classifiers, see https://pypi.org/classifiers/
@@ -59,6 +59,7 @@ Repository = "https://github.com/alisiafadini/ROCKET"
 
 [project.scripts]
 "rk.refine" = "rocket.scripts.run_refine:cli_runrefine"
+"rk.refine_mse" = "rocket.scripts.run_refine:cli_refine_mse"
 "rk.config" = "rocket.scripts.run_config:cli_runconfig"
 
 [tool.setuptools.dynamic]

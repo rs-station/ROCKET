@@ -74,5 +74,48 @@ def main() -> None:
     )
 
 
+def run_mse_only(
+    config_path: str,
+    selection_override: str | None = None,
+) -> None:
+    """Run **only** MSE coordinate loss refinement (no realspace map loss).
+
+    This is the backend for ``rk.refine_mse``.  It:
+    * forces ``mse_selection`` to *selection_override* (default ``"BB"``)
+    * enables weighted Kabsch inside ``run_mseloss_refinement``
+    * skips the realspace refinement phase entirely
+
+    Args:
+        config_path: Path to YAML config file.
+        selection_override: Override ``panddamap.mse_selection``
+            (``"BB"`` | ``"CA"`` | ``"ALL"``).
+    """
+    config = RocketRefinmentConfig.from_yaml_file(config_path)
+
+    # Logging
+    logger.remove()
+    log_level = "DEBUG" if config.execution.verbose else "INFO"
+    logger.add(sys.stderr, level=log_level)
+
+    # Force backbone selection if requested
+    if selection_override is not None:
+        config.panddamap.mse_selection = selection_override.upper()
+        logger.info("MSE atom selection forced to: {}", config.panddamap.mse_selection)
+
+    logger.info(
+        "Running MSE-only refinement on {} atoms with weighted Kabsch...",
+        config.panddamap.mse_selection,
+    )
+    bias_tensor, weights_tensor = pipeline.run_mseloss_refinement(
+        config,
+        writeout=True,
+    )
+    logger.info(
+        "MSE refinement complete. Final bias norm: {:.4f}, weights norm: {:.4f}",
+        torch.norm(bias_tensor).item() if bias_tensor is not None else 0.0,
+        torch.norm(weights_tensor).item() if weights_tensor is not None else 0.0,
+    )
+
+
 if __name__ == "__main__":
     main()
