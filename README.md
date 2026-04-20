@@ -4,13 +4,13 @@
 [![Build](https://github.com/alisiafadini/ROCKET/actions/workflows/test.yml/badge.svg)](https://github.com/alisiafadini/ROCKET/actions/workflows/test.yml)
 [![Ruff](https://github.com/alisiafadini/ROCKET/actions/workflows/lint.yml/badge.svg)](https://github.com/alisiafadini/ROCKET/actions/workflows/lint.yml)
 [![GitHub License](https://img.shields.io/github/license/alisiafadini/ROCKET)](https://github.com/alisiafadini/ROCKET/blob/main/LICENSE)
-[![BioRXiv](https://img.shields.io/badge/DOI-10.1101%2F2025.02.18.638828v2-purple?link=https%3A%2F%2Fwww.biorxiv.org%2Fcontent%2F10.1101%2F2025.02.18.638828v2)](https://www.biorxiv.org/content/10.1101/2025.02.18.638828v2)
+[![Nature Methods](https://img.shields.io/badge/DOI-10.1038%2Fs41592--026--03047--4-purple?link=https%3A%2F%2Fwww.nature.com%2Farticles%2Fs41592-026-03047-4)](https://www.nature.com/articles/s41592-026-03047-4)
 [![Doc](https://img.shields.io/badge/Doc-GitBook-violet)](https://rocket-9.gitbook.io/rocket-docs)
 
 
 
 
-This is the code repo for [AlphaFold as a Prior: Experimental Structure Determination Conditioned on a Pretrained Neural Network](https://www.biorxiv.org/content/10.1101/2025.02.18.638828v2)
+This is the code repo for [AlphaFold as a Prior: Experimental Structure Determination Conditioned on a Pretrained Neural Network](https://www.nature.com/articles/s41592-026-03047-4)
 
 You can find detailed documentation and walk-through tutorials in [our GitBook](https://rocket-9.gitbook.io/rocket-docs) and our [SBGrid webinar](https://www.youtube.com/watch?v=_29CpGPqIQA).
 
@@ -166,7 +166,7 @@ pip install rs-rocket
 For developer mode, you can fetch the repo and do editable installation locally 
 
 ```
-git clone https://github.com/alisiafadini/ROCKET.git
+git clone https://github.com/rs-station/ROCKET.git
 cd ROCKET
 pip install -e ".[tests,CI]"
 ```
@@ -178,11 +178,14 @@ Run `rk.score --help` after installation, if you see a normal doc strings withou
 ### Citing
 
 ```
-@article{fadini2025alphafold,
-  title={AlphaFold as a Prior: Experimental Structure Determination Conditioned on a Pretrained Neural Network},
-  author={Fadini, Alisia and Li, Minhuan and McCoy, Airlie J and Terwilliger, Thomas C and Read, Randy J and Hekstra, Doeke and AlQuraishi, Mohammed},
-  journal={bioRxiv},
-  year={2025}
+@article{fadini2026,
+  title={AlphaFold as a prior: experimental structure determination conditioned on a pretrained neural network},
+  author={Fadini, Alisia and Li, Minhuan and McCoy, Airlie J. and Banjara, Suresh and Okumura, Hiroki and Napier, Eve and Fontana, Pietro and Khan, Amir R. and Jovine, Luca and Terwilliger, Thomas C. and Read, Randy J. and Hekstra, Doeke R. and AlQuraishi, Mohammed},
+  journal={Nature Methods},
+  volume={23},
+  pages={785--795},
+  year={2026},
+  doi={10.1038/s41592-026-03047-4}
 }
 ```
 
