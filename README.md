@@ -24,7 +24,7 @@
 </td>
 <td width="60%" valign="middle">
 
-### Fit atomic models to structural data using AlphaFold as a powerful prior.
+### Fit atomic models to data using AlphaFold as a prior.
 
 Check out our paper in _Nature Methods_ describing how it works: [**AlphaFold as a Prior: Experimental Structure Determination Conditioned on a Pretrained Neural Network**](https://www.nature.com/articles/s41592-026-03047-4).
 
