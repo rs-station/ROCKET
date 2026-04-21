@@ -1,3 +1,4 @@
+
 # *R*efining *O*penfold predictions with *C*rystallographic/*C*ryo-EM Li*KE*lihood *T*argets (ROCKET) 🚀
 
 ![PyPI - Version](https://img.shields.io/pypi/v/rs-rocket)
@@ -9,6 +10,8 @@
 
 
 This is the code repo for [AlphaFold as a Prior: Experimental Structure Determination Conditioned on a Pretrained Neural Network](https://www.nature.com/articles/s41592-026-03047-4)
+
+<img width="320" height="480" alt="rocket-demo-small" src="https://github.com/user-attachments/assets/1c4af8cc-db01-4d40-a21d-52559b33d9c1" />
 
 You can find detailed documentation and walk-through tutorials in [our GitBook](https://rocket-9.gitbook.io/rocket-docs) and our [SBGrid webinar](https://www.youtube.com/watch?v=_29CpGPqIQA).
 
