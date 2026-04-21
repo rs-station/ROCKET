@@ -26,7 +26,7 @@
 
 ### Fit atomic models to data using AlphaFold as a prior.
 
-Check out our paper in _Nature Methods_ describing how it works: [**AlphaFold as a Prior: Experimental Structure Determination Conditioned on a Pretrained Neural Network**](https://www.nature.com/articles/s41592-026-03047-4).
+Check out our paper, [AlphaFold as a Prior: Experimental Structure Determination Conditioned on a Pretrained Neural Network**](https://www.nature.com/articles/s41592-026-03047-4), in _Nature Methods_ to learn how it works.
 
 You can find detailed documentation and walk-through tutorials in [our GitBook](https://rocket-9.gitbook.io/rocket-docs) and our [SBGrid webinar](https://www.youtube.com/watch?v=_29CpGPqIQA).
 
