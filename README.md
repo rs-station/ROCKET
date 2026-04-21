@@ -30,9 +30,9 @@ Check out our paper in _Nature Methods_ describing how it works: [**AlphaFold as
 
 You can find detailed documentation and walk-through tutorials in [our GitBook](https://rocket-9.gitbook.io/rocket-docs) and our [SBGrid webinar](https://www.youtube.com/watch?v=_29CpGPqIQA).
 
-#### Installation
+### Installation
 
-ROCKET depends on OpenFold, Phenix, and the `rs-rocket` package. Head over to our docs for a full walk-through:
+Ready to get going? Head over to our docs for a full walk-through on:
 
 > 📦 **[Installing ROCKET →](https://rocket-9.gitbook.io/rocket-docs/getting-started/installing-rocket)**
 
