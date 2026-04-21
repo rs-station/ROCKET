@@ -24,7 +24,7 @@
 </td>
 <td width="60%" valign="middle">
 
-Fit atomic models to structural data using AlphaFold as a powerful prior.
+### Fit atomic models to structural data using AlphaFold as a powerful prior.
 
 Check out our paper in _Nature Methods_ describing how it works: [**AlphaFold as a Prior: Experimental Structure Determination Conditioned on a Pretrained Neural Network**](https://www.nature.com/articles/s41592-026-03047-4).
 
@@ -35,6 +35,11 @@ You can find detailed documentation and walk-through tutorials in [our GitBook](
 Ready to get going? Head over to our docs for a full walk-through on:
 
 > 📦 **[Installing ROCKET →](https://rocket-9.gitbook.io/rocket-docs/getting-started/installing-rocket)**
+
+
+### Questions?
+
+Found a bug or have a feature request? Please [open an issue on GitHub](https://github.com/rs-station/ROCKET/issues). For science questions — methodology, interpreting results, or general discussion — head over to the [rs-station Discourse](https://discourse.rs-station.org/).
 
 </td>
 </tr>
