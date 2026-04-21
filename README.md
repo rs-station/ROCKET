@@ -7,12 +7,14 @@
 
 </div>
 
-![PyPI - Version](https://img.shields.io/pypi/v/rs-rocket)
-[![Build](https://github.com/alisiafadini/ROCKET/actions/workflows/test.yml/badge.svg)](https://github.com/alisiafadini/ROCKET/actions/workflows/test.yml)
-[![Ruff](https://github.com/alisiafadini/ROCKET/actions/workflows/lint.yml/badge.svg)](https://github.com/alisiafadini/ROCKET/actions/workflows/lint.yml)
-[![GitHub License](https://img.shields.io/github/license/alisiafadini/ROCKET)](https://github.com/alisiafadini/ROCKET/blob/main/LICENSE)
-[![Nature Methods](https://img.shields.io/badge/DOI-10.1038%2Fs41592--026--03047--4-purple?link=https%3A%2F%2Fwww.nature.com%2Farticles%2Fs41592-026-03047-4)](https://www.nature.com/articles/s41592-026-03047-4)
-[![Doc](https://img.shields.io/badge/Doc-GitBook-violet)](https://rocket-9.gitbook.io/rocket-docs)
+<p align="center">
+  <img alt="PyPI - Version" src="https://img.shields.io/pypi/v/rs-rocket">
+  <a href="https://github.com/alisiafadini/ROCKET/actions/workflows/test.yml"><img alt="Build" src="https://github.com/alisiafadini/ROCKET/actions/workflows/test.yml/badge.svg"></a>
+  <a href="https://github.com/alisiafadini/ROCKET/actions/workflows/lint.yml"><img alt="Ruff" src="https://github.com/alisiafadini/ROCKET/actions/workflows/lint.yml/badge.svg"></a>
+  <a href="https://github.com/alisiafadini/ROCKET/blob/main/LICENSE"><img alt="GitHub License" src="https://img.shields.io/github/license/alisiafadini/ROCKET"></a>
+  <a href="https://www.nature.com/articles/s41592-026-03047-4"><img alt="Nature Methods" src="https://img.shields.io/badge/DOI-10.1038%2Fs41592--026--03047--4-purple"></a>
+  <a href="https://rocket-9.gitbook.io/rocket-docs"><img alt="Doc" src="https://img.shields.io/badge/Doc-GitBook-violet"></a>
+</p>
 
 
 <table>
@@ -24,20 +26,19 @@
 
 Fit atomic models to structural data using AlphaFold as a powerful prior.
 
-This is the code repo for [**AlphaFold as a Prior: Experimental Structure Determination Conditioned on a Pretrained Neural Network**](https://www.nature.com/articles/s41592-026-03047-4).
+Check out our paper in _Nature Methods_ describing how it works: [**AlphaFold as a Prior: Experimental Structure Determination Conditioned on a Pretrained Neural Network**](https://www.nature.com/articles/s41592-026-03047-4).
 
 You can find detailed documentation and walk-through tutorials in [our GitBook](https://rocket-9.gitbook.io/rocket-docs) and our [SBGrid webinar](https://www.youtube.com/watch?v=_29CpGPqIQA).
 
-</td>
-</tr>
-</table>
-
-## Installation
+#### Installation
 
 ROCKET depends on OpenFold, Phenix, and the `rs-rocket` package. Head over to our docs for a full walk-through:
 
 > 📦 **[Installing ROCKET →](https://rocket-9.gitbook.io/rocket-docs/getting-started/installing-rocket)**
 
+</td>
+</tr>
+</table>
 
 ## Citing our work
 
