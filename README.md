@@ -1,5 +1,11 @@
 
-# *R*efining *O*penfold predictions with *C*rystallographic/*C*ryo-EM Li*KE*lihood *T*argets (ROCKET) 🚀
+<div align="center">
+
+# 🚀 ROCKET
+
+#### *<ins>R</ins>efining <ins>O</ins>penfold predictions with <ins>C</ins>rystallographic / Cryo-EM Li<ins>KE</ins>lihood <ins>T</ins>argets*
+
+</div>
 
 ![PyPI - Version](https://img.shields.io/pypi/v/rs-rocket)
 [![Build](https://github.com/alisiafadini/ROCKET/actions/workflows/test.yml/badge.svg)](https://github.com/alisiafadini/ROCKET/actions/workflows/test.yml)
@@ -9,11 +15,22 @@
 [![Doc](https://img.shields.io/badge/Doc-GitBook-violet)](https://rocket-9.gitbook.io/rocket-docs)
 
 
-This is the code repo for [AlphaFold as a Prior: Experimental Structure Determination Conditioned on a Pretrained Neural Network](https://www.nature.com/articles/s41592-026-03047-4)
+<table>
+<tr>
+<td width="40%" valign="middle">
+<img alt="rocket-demo-small" src="https://github.com/user-attachments/assets/1c4af8cc-db01-4d40-a21d-52559b33d9c1" />
+</td>
+<td width="60%" valign="middle">
 
-<img width="320" height="480" alt="rocket-demo-small" src="https://github.com/user-attachments/assets/1c4af8cc-db01-4d40-a21d-52559b33d9c1" />
+Fit atomic models to structural data using AlphaFold as a powerful prior.
+
+This is the code repo for [**AlphaFold as a Prior: Experimental Structure Determination Conditioned on a Pretrained Neural Network**](https://www.nature.com/articles/s41592-026-03047-4).
 
 You can find detailed documentation and walk-through tutorials in [our GitBook](https://rocket-9.gitbook.io/rocket-docs) and our [SBGrid webinar](https://www.youtube.com/watch?v=_29CpGPqIQA).
+
+</td>
+</tr>
+</table>
 
 ## Installation
 
