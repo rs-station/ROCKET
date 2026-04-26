@@ -18,6 +18,7 @@ from rocket.utils import (
     move_tensors_to_device,
     move_tensors_to_device_inplace,
     plddt2pseudoB_np,
+    plddt2pseudoB_pt,
     tree_map,
     try_gpu,
     weighting,
@@ -37,6 +38,54 @@ def test_plddt2pseudoB_empty():
     arr = np.array([])
     out = plddt2pseudoB_np(arr)
     assert out.shape == arr.shape
+
+
+def test_plddt2pseudoB_known_values():
+    out = plddt2pseudoB_np(np.array([70.0, 100.0, 0.0]))
+    # At pLDDT=70: delta = 1.5 -> B = 8*pi^2/3 * 1.5^2 = 6*pi^2
+    np.testing.assert_allclose(out[0], 6 * np.pi**2, rtol=1e-10)
+    np.testing.assert_allclose(
+        out[1], 8 * np.pi**2 / 3 * (1.5 * np.exp(-1.2)) ** 2, rtol=1e-10
+    )
+    np.testing.assert_allclose(
+        out[2], 8 * np.pi**2 / 3 * (1.5 * np.exp(2.8)) ** 2, rtol=1e-10
+    )
+
+
+def test_plddt2pseudoB_monotonic():
+    plddts = np.linspace(0, 100, 50)
+    out = plddt2pseudoB_np(plddts)
+    assert np.all(np.diff(out) < 0)
+
+
+def test_plddt2pseudoB_np_pt_parity():
+    plddts = np.linspace(0, 100, 25)
+    np_out = plddt2pseudoB_np(plddts)
+    pt_out = plddt2pseudoB_pt(torch.tensor(plddts, dtype=torch.float64)).numpy()
+    np.testing.assert_allclose(np_out, pt_out, rtol=1e-10)
+
+
+def test_plddt2pseudoB_pt_shape_and_dtype():
+    x = torch.tensor([10.0, 50.0, 90.0])
+    out = plddt2pseudoB_pt(x)
+    assert out.shape == x.shape
+    assert out.dtype == x.dtype
+    assert torch.all(out > 0)
+    assert torch.isfinite(out).all()
+
+
+def test_plddt2pseudoB_pt_autograd():
+    x = torch.tensor([30.0, 70.0, 95.0], requires_grad=True)
+    out = plddt2pseudoB_pt(x)
+    out.sum().backward()
+    assert torch.isfinite(x.grad).all()
+    # dB/d(pLDDT) is negative everywhere (B strictly decreases with pLDDT)
+    assert torch.all(x.grad < 0)
+
+
+def test_plddt2pseudoB_pt_empty():
+    out = plddt2pseudoB_pt(torch.tensor([]))
+    assert out.shape == (0,)
 
 
 def test_weighting_cutoffs():
