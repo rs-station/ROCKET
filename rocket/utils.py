@@ -24,6 +24,25 @@ def plddt2pseudoB_pt(plddts):
     return b_factors
 
 
+def cc_to_bfactor( 
+    cc_values: torch.Tensor, 
+    dmin: float, 
+) -> torch.Tensor: 
+    """Convert correlation coefficients to pseudo B-factors. 
+
+    Args: 
+        cc_values: Correlation coefficient values [N] 
+        dmin: Minimum resolution in Angstroms 
+
+    Returns: 
+        Pseudo B-factors [N] 
+    """ 
+    # Empirical conversion: B = -8π²d²ln(CC) 
+    cc_clamped = torch.clamp(cc_values, min=0.001, max=0.999) 
+    b_factors = -8.0 * (torch.pi**2) * (dmin**2) * torch.log(cc_clamped) 
+    return torch.clamp(b_factors, min=10.0, max=200.0) 
+
+
 def weighting(x, cutoff1=11.5, cutoff2=30.0):
     """
     Convert B factor to weights for L2 loss and Kabsch Alignment
